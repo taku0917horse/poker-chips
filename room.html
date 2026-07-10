@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#16a34a">
+<title>PokerChips</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --primary: #16a34a; --primary-dark: #15803d;
+    --grad-start: #16a34a; --grad-end: #0891b2;
+    --danger: #dc2626; --warning: #d97706;
+    --success: #16a34a;
+    --bg: #f0fdf4; --card: #ffffff;
+    --text: #1e293b; --subtext: #64748b;
+    --border: #e2e8f0; --shadow: 0 2px 16px rgba(0,0,0,0.07);
+  }
+
+  body {
+    font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    padding-bottom: 24px;
+  }
+
+  .hidden { display: none !important; }
+
+  /* ---- オーバーレイ共通 ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 300;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 24px; background: var(--bg);
+  }
+
+  .spinner {
+    width: 44px; height: 44px;
+    border: 4px solid var(--border); border-top-color: var(--primary);
+    border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .overlay-card {
+    background: white; border-radius: 20px;
+    padding: 36px 24px; box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+    text-align: center; width: 100%; max-width: 360px;
+  }
+  .overlay-icon { margin-bottom: 16px; color: var(--subtext); display: flex; justify-content: center; }
+  .overlay-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+  .overlay-sub   { font-size: 14px; color: var(--subtext); line-height: 1.7; margin-bottom: 24px; }
+
+  /* ---- 参加フォームオーバーレイ ---- */
+  .join-overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 24px;
+    overflow-y: auto;
+  }
+  .join-card {
+    background: white; border-radius: 20px;
+    padding: 32px 24px; box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+    width: 100%; max-width: 360px;
+  }
+  .join-logo {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, var(--grad-start), var(--grad-end));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .join-title  { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+  .join-room-id {
+    text-align: center; font-size: 13px; color: var(--subtext);
+    margin-bottom: 28px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .room-code-badge {
+    font-family: 'Courier New', monospace; font-size: 18px; font-weight: 700;
+    letter-spacing: 3px; color: var(--primary);
+    background: #f0fdf4; border-radius: 8px; padding: 4px 12px;
+  }
+  .form-label {
+    display: block; font-size: 11px; font-weight: 700; color: var(--subtext);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+  }
+  .form-field { margin-bottom: 14px; }
+  input:not([type='checkbox']) {
+    width: 100%; padding: 12px 14px;
+    border: 1.5px solid var(--border); border-radius: 12px;
+    font-size: 15px; color: var(--text); background: white;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none; appearance: none; font-family: inherit;
+  }
+  input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(22,163,74,0.12); }
+  .form-error { color: var(--danger); font-size: 13px; margin-bottom: 10px; display: none; }
+
+  /* ---- ボタン ---- */
+  .btn {
+    padding: 12px 20px; border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; font-family: inherit; white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.96); }
+  .btn-primary  { background: var(--primary); color: white; width: 100%; }
+  .btn-primary:active  { background: var(--primary-dark); }
+  .btn-danger   { background: #fee2e2; color: var(--danger); }
+  .btn-danger:active   { background: #fecaca; }
+  .btn-ghost    { background: rgba(255,255,255,0.2); color: white; border: none; }
+  .btn-ghost:active    { background: rgba(255,255,255,0.35); }
+
+  /* ---- ヘッダー ---- */
+  header {
+    background: linear-gradient(135deg, var(--grad-start) 0%, var(--grad-end) 100%);
+    color: white; padding: 13px 16px 12px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    position: sticky; top: 0; z-index: 50;
+  }
+  .header-back {
+    background: rgba(255,255,255,0.18); border: none; color: white;
+    border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    transition: background 0.15s; text-decoration: none;
+    display: flex; align-items: center; gap: 4px; font-family: inherit;
+  }
+  .header-back:active { background: rgba(255,255,255,0.35); }
+  .header-center { flex: 1; text-align: center; min-width: 0; }
+  .header-room-code {
+    font-family: 'Courier New', monospace; font-size: 16px; font-weight: 700;
+    letter-spacing: 3px; cursor: pointer;
+    background: rgba(255,255,255,0.15); border-radius: 8px; padding: 4px 12px;
+    transition: opacity 0.15s; display: inline-block;
+  }
+  .header-room-code:active { opacity: 0.5; }
+  .header-status { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+  .header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .rt-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: rgba(255,255,255,0.3); transition: background 0.3s; flex-shrink: 0;
+  }
+  .rt-dot.connected  { background: #4ade80; }
+  .rt-dot.connecting { background: #fbbf24; animation: blink 1s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{ opacity:1; } 50%{ opacity:0.3; } }
+  .share-btn {
+    background: rgba(255,255,255,0.22); border: none; color: white;
+    border-radius: 9px; padding: 7px 13px; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: background 0.15s;
+    display: flex; align-items: center; gap: 5px; font-family: inherit;
+  }
+  .share-btn:active { background: rgba(255,255,255,0.38); }
+
+  /* ---- カード ---- */
+  .section-card {
+    background: var(--card); border-radius: 16px;
+    padding: 16px; box-shadow: var(--shadow); margin: 12px 16px 0;
+  }
+  .card-title {
+    font-size: 12px; font-weight: 700; color: var(--subtext);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* ---- アバター ---- */
+  .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 700; color: white; flex-shrink: 0;
+  }
+  .you-badge {
+    display: inline-block; background: var(--primary); color: white;
+    font-size: 10px; font-weight: 700; padding: 1px 6px;
+    border-radius: 10px; margin-left: 5px; vertical-align: middle;
+  }
+  .host-badge {
+    display: inline-block; background: #f59e0b; color: white;
+    font-size: 10px; font-weight: 700; padding: 1px 6px;
+    border-radius: 10px; margin-left: 5px; vertical-align: middle;
+  }
+
+  /* ---- プレイヤー行（プレイ中） ---- */
+  .player-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px; background: #f8faff; border-radius: 12px; margin-bottom: 8px;
+  }
+  .player-row.my-row { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .player-meta { flex: 1; min-width: 0; }
+  .player-name-text { font-size: 15px; font-weight: 600; }
+  .player-buyin-text { font-size: 13px; color: var(--subtext); margin-top: 2px; }
+  .buyin-chips-val { font-weight: 700; color: var(--primary); }
+  .btn-add-buyin {
+    background: var(--primary); color: white; border: none;
+    border-radius: 10px; padding: 8px 14px; font-size: 13px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; flex-shrink: 0; font-family: inherit;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .btn-add-buyin:active { background: var(--primary-dark); transform: scale(0.95); }
+
+  /* ---- ゲーム終了ボタン ---- */
+  .end-game-wrap {
+    margin: 16px 16px 0; padding: 16px;
+    background: white; border-radius: 16px; box-shadow: var(--shadow);
+  }
+  .btn-end-game {
+    width: 100%; padding: 15px;
+    background: #dc2626; color: white; border: none;
+    border-radius: 12px; font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-end-game:active { background: #b91c1c; transform: scale(0.97); }
+  .end-game-note { font-size: 12px; color: var(--subtext); text-align: center; margin-top: 8px; }
+
+  /* ---- 結果フェーズ ---- */
+  .result-row {
+    background: #f8faff; border-radius: 12px; padding: 12px;
+    margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px;
+  }
+  .result-row.my-row { background: #f0fdf4; border: 1px solid #bbf7d0; }
+  .result-meta { flex: 1; min-width: 0; }
+  .result-buyin { font-size: 12px; color: var(--subtext); margin-top: 2px; }
+  .result-right { flex-shrink: 0; text-align: right; min-width: 110px; }
+  .final-chips-input {
+    width: 110px; padding: 8px 10px;
+    border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 15px; font-weight: 600; text-align: right;
+    color: var(--text); background: white;
+    outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+    font-family: inherit;
+  }
+  .final-chips-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(22,163,74,0.12); }
+  .final-chips-display { font-size: 15px; font-weight: 700; color: var(--text); }
+  .waiting-text { font-size: 13px; color: var(--subtext); font-style: italic; }
+  .diff-val {
+    font-size: 15px; font-weight: 700; margin-top: 4px; display: block;
+  }
+  .diff-val.positive { color: var(--success); }
+  .diff-val.negative { color: var(--danger); }
+  .diff-val.zero     { color: var(--subtext); }
+
+  /* ---- 整合性チェック ---- */
+  .consistency-card {
+    margin: 12px 16px 0;
+    background: white; border-radius: 16px;
+    padding: 16px; box-shadow: var(--shadow);
+  }
+  .consistency-title {
+    font-size: 12px; font-weight: 700; color: var(--subtext);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .consistency-value {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px; border-radius: 12px; font-size: 15px; font-weight: 700;
+  }
+  .consistency-value.ok      { background: #dcfce7; color: var(--success); }
+  .consistency-value.ng      { background: #fee2e2; color: var(--danger); }
+  .consistency-value.pending { background: #fef9c3; color: var(--warning); }
+  .consistency-note { font-size: 12px; color: var(--subtext); margin-top: 8px; line-height: 1.6; }
+
+  /* ---- 結果ヘッダーバナー ---- */
+  .result-banner {
+    background: linear-gradient(135deg, #15803d, #0891b2);
+    color: white; text-align: center; padding: 20px 16px;
+    margin-bottom: 0;
+  }
+  .result-banner h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+  .result-banner p  { font-size: 13px; opacity: 0.85; }
+
+  /* ---- トップ戻るボタン ---- */
+  .back-top-wrap { margin: 16px 16px 0; }
+  .btn-back-top {
+    width: 100%; padding: 14px;
+    background: white; color: var(--subtext); border: 1.5px solid var(--border);
+    border-radius: 12px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+  .btn-back-top:active { background: #f0fdf4; border-color: var(--primary); color: var(--primary); }
+
+  /* ---- Buy-in モーダル ---- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 500; display: flex; align-items: flex-end;
+  }
+  .modal-sheet {
+    background: white; border-radius: 20px 20px 0 0;
+    padding: 24px 20px 40px;
+    width: 100%; animation: slideUp 0.22s ease;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+  .modal-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+  }
+  .modal-title { font-size: 18px; font-weight: 700; }
+  .modal-close {
+    background: none; border: none; color: var(--subtext); cursor: pointer;
+    padding: 4px; display: flex; align-items: center;
+  }
+  .modal-close:active { color: var(--text); }
+  .modal-label {
+    font-size: 11px; color: var(--subtext); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; display: block;
+  }
+  .chips-quick-btns {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px;
+  }
+  .quick-btn {
+    padding: 10px 4px; background: #f0fdf4; color: var(--primary);
+    border: 1.5px solid #bbf7d0; border-radius: 10px;
+    font-size: 13px; font-weight: 700; cursor: pointer;
+    text-align: center; transition: all 0.15s; font-family: inherit;
+  }
+  .quick-btn:active { background: var(--primary); color: white; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-cancel-btn {
+    flex: 1; padding: 13px 0; border: none; border-radius: 12px;
+    background: #f1f5f9; color: var(--subtext); font-size: 15px;
+    font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit;
+  }
+  .modal-cancel-btn:active { background: #e2e8f0; }
+  .modal-confirm-btn {
+    flex: 2; padding: 13px 0; border: none; border-radius: 12px;
+    background: var(--primary); color: white; font-size: 15px;
+    font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: inherit;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .modal-confirm-btn:active { background: var(--primary-dark); transform: scale(0.97); }
+
+  /* ---- 空プレイヤー ---- */
+  .empty-state {
+    text-align: center; padding: 32px 20px; color: var(--subtext);
+  }
+  .empty-state .icon { display: flex; justify-content: center; margin-bottom: 10px; }
+  .empty-state p { font-size: 14px; }
+
+  /* ---- トースト ---- */
+  .toast {
+    position: fixed; bottom: 30px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1e293b; color: white;
+    padding: 10px 22px; border-radius: 24px;
+    font-size: 13px; font-weight: 600;
+    opacity: 0; transition: all 0.3s; pointer-events: none;
+    white-space: nowrap; z-index: 600;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  [data-lucide] { display: inline-block; vertical-align: middle; }
+</style>
+</head>
+<body>
+
+<!-- ローディング -->
+<div id="overlay-loading" class="overlay">
+  <div class="spinner"></div>
+  <div style="color:var(--subtext);font-size:14px;font-weight:600">読み込み中...</div>
+</div>
+
+<!-- エラー -->
+<div id="overlay-error" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-icon">
+      <i data-lucide="alert-circle" width="56" height="56"></i>
+    </div>
+    <div class="overlay-title" id="error-title">エラーが発生しました</div>
+    <div class="overlay-sub" id="error-detail"></div>
+    <a href="index.html" class="btn btn-primary" style="text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px">
+      <i data-lucide="arrow-left" width="18" height="18"></i>トップに戻る
+    </a>
+  </div>
+</div>
+
+<!-- 参加フォーム -->
+<div id="overlay-join" class="join-overlay hidden">
+  <div class="join-card">
+    <div class="join-title">
+      <span style="font-size:28px">♠</span> ゲームに参加
+    </div>
+    <div class="join-room-id">
+      ルームコード: <span id="join-room-code" class="room-code-badge">------</span>
+    </div>
+
+    <div class="form-field">
+      <label class="form-label">お名前 <span style="color:var(--danger)">*</span></label>
+      <input id="join-name" type="text" placeholder="例：田中" maxlength="12"
+        onkeydown="if(event.key==='Enter') document.getElementById('join-chips').focus()">
+    </div>
+    <div class="form-field">
+      <label class="form-label">初期チップ数 <span style="color:var(--danger)">*</span></label>
+      <input id="join-chips" type="number" value="1000" min="1"
+        onkeydown="if(event.key==='Enter') registerPlayer()">
+    </div>
+    <div id="join-error" class="form-error"></div>
+    <button class="btn btn-primary" onclick="registerPlayer()" style="font-size:16px;padding:15px">
+      <i data-lucide="log-in" width="18" height="18"></i> 参加する
+    </button>
+  </div>
+</div>
+
+<!-- アプリ本体 -->
+<div id="app-shell" class="hidden">
+
+  <header>
+    <a href="index.html" class="header-back">
+      <i data-lucide="arrow-left" width="16" height="16"></i>戻る
+    </a>
+    <div class="header-center">
+      <div id="header-room-code" class="header-room-code" onclick="copyRoomCode()" title="タップしてコピー">------</div>
+      <div id="header-status" class="header-status"></div>
+    </div>
+    <div class="header-right">
+      <div id="rt-dot" class="rt-dot connecting"></div>
+      <button class="share-btn" onclick="shareRoom()">
+        <i data-lucide="link" width="14" height="14"></i>共有
+      </button>
+    </div>
+  </header>
+
+  <!-- プレイ中フェーズ -->
+  <div id="phase-playing" class="hidden">
+    <div class="section-card">
+      <div class="card-title">
+        <i data-lucide="users" width="14" height="14"></i>
+        参加者一覧 <span id="player-count" style="font-size:11px;background:var(--primary);color:white;padding:1px 7px;border-radius:10px;font-weight:700;margin-left:4px">0</span>
+      </div>
+      <div id="player-list">
+        <div class="empty-state">
+          <div class="icon"><i data-lucide="users" width="44" height="44"></i></div>
+          <p>参加者を待っています…</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="end-game-wrap" class="end-game-wrap hidden">
+      <button class="btn-end-game" onclick="endGame()">
+        <i data-lucide="flag" width="20" height="20"></i>
+        ゲームを終了する
+      </button>
+      <p class="end-game-note">全員が最終チップ数入力画面に移行します</p>
+    </div>
+  </div>
+
+  <!-- 結果フェーズ -->
+  <div id="phase-results" class="hidden">
+    <div class="result-banner">
+      <h2>🏆 ゲーム終了</h2>
+      <p>各自の最終チップ数を入力してください</p>
+    </div>
+
+    <div class="section-card">
+      <div class="card-title">
+        <i data-lucide="trophy" width="14" height="14"></i>
+        最終チップ数入力
+      </div>
+      <div style="font-size:11px;color:var(--subtext);margin-bottom:10px">
+        自分の行に最終チップ数を入力 → Enter または別の場所をタップで保存
+      </div>
+      <div id="results-list"></div>
+    </div>
+
+    <div class="consistency-card" id="consistency-card"></div>
+
+    <div class="back-top-wrap">
+      <button class="btn-back-top" onclick="location.href='index.html'">
+        <i data-lucide="home" width="18" height="18"></i>
+        トップに戻る
+      </button>
+    </div>
+  </div>
+
+</div><!-- #app-shell -->
+
+<!-- Buy-in追加モーダル -->
+<div id="buyin-modal" class="modal-overlay hidden" onclick="handleBuyInBackdrop(event)">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">チップを追加（Buy-in）</span>
+      <button class="modal-close" onclick="closeBuyInModal()">
+        <i data-lucide="x" width="22" height="22"></i>
+      </button>
+    </div>
+    <div>
+      <label class="modal-label">追加チップ数</label>
+      <input id="buyin-amount" type="number" value="1000" min="1"
+        onkeydown="if(event.key==='Enter') confirmBuyIn()">
+    </div>
+    <div class="chips-quick-btns">
+      <button class="quick-btn" onclick="setBuyInAmount(500)">500</button>
+      <button class="quick-btn" onclick="setBuyInAmount(1000)">1000</button>
+      <button class="quick-btn" onclick="setBuyInAmount(2000)">2000</button>
+      <button class="quick-btn" onclick="setBuyInAmount(5000)">5000</button>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-cancel-btn" onclick="closeBuyInModal()">キャンセル</button>
+      <button class="modal-confirm-btn" onclick="confirmBuyIn()">
+        <i data-lucide="plus" width="18" height="18"></i>追加する
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+  let roomId      = null;
+  let myUid       = null;
+  let roomData    = null;
+  let players     = {};  // { [uid]: { name, buyInChips, finalChips, joinedAt } }
+  let isHost      = false;
+  let unsubRoom   = null;
+  let unsubPlayers = null;
+  let resultsInitialized = false;
+
+  // ---- フェーズ管理 ---- //
+
+  function showOverlay(name) {
+    document.getElementById('overlay-loading').classList.toggle('hidden', name !== 'loading');
+    document.getElementById('overlay-error').classList.toggle('hidden',   name !== 'error');
+    document.getElementById('overlay-join').classList.toggle('hidden',    name !== 'join');
+    document.getElementById('app-shell').classList.toggle('hidden',       name !== 'app');
+  }
+
+  function showError(title, detail) {
+    document.getElementById('error-title').textContent  = title;
+    document.getElementById('error-detail').textContent = detail;
+    showOverlay('error');
+    renderIcons();
+  }
+
+  function setAppPhase(phase) {
+    document.getElementById('phase-playing').classList.toggle('hidden', phase !== 'playing');
+    document.getElementById('phase-results').classList.toggle('hidden', phase !== 'results');
+  }
+
+  function setRtStatus(s) {
+    const el = document.getElementById('rt-dot');
+    if (el) el.className = 'rt-dot ' + s;
+  }
+
+  // ---- 初期化 ---- //
+
+  window.addEventListener('DOMContentLoaded', () => {
+    roomId = new URLSearchParams(location.search).get('room');
+    if (!roomId) { location.href = 'index.html'; return; }
+
+    if (typeof firebase === 'undefined') {
+      showError('Firebase 読み込みエラー', 'Firebase JS の読み込みに失敗しました。ネットワーク接続を確認してください。');
+      return;
+    }
+
+    const { auth } = initFirebase();
+    auth.onAuthStateChanged(async (user) => {
+      if (!user) {
+        try { await auth.signInAnonymously(); }
+        catch (err) { showError('認証エラー', err.message); }
+        return;  // onAuthStateChanged が再発火する
+      }
+      myUid = user.uid;
+      await loadRoom();
+    });
+  });
+
+  async function loadRoom() {
+    showOverlay('loading');
+    const { db } = initFirebase();
+    try {
+      const roomDoc = await db.collection(ROOMS_COLLECTION).doc(roomId).get();
+      if (!roomDoc.exists) {
+        showError('ルームが見つかりません', 'このルームIDは存在しないか、URLが正しくありません。');
+        return;
+      }
+      roomData = roomDoc.data();
+
+      // ゲーム終了後の未登録プレイヤーは参加不可
+      const playerDoc = await db.collection(ROOMS_COLLECTION).doc(roomId)
+        .collection('players').doc(myUid).get();
+
+      if (!playerDoc.exists) {
+        if (roomData.status === 'finished') {
+          showError('ゲーム終了', 'このゲームはすでに終了しています。ルームコードで参加することはできません。');
+          return;
+        }
+        document.getElementById('join-room-code').textContent = roomId;
+        showOverlay('join');
+        renderIcons();
+        setTimeout(() => document.getElementById('join-name').focus(), 150);
+        return;
+      }
+
+      startListeners();
+    } catch (err) {
+      console.error('loadRoom error:', err);
+      showError('読み込みエラー', err.message || String(err));
+    }
+  }
+
+  function startListeners() {
+    const { db } = initFirebase();
+
+    // ルームリスナー
+    let firstRoom = true;
+    unsubRoom = db.collection(ROOMS_COLLECTION).doc(roomId).onSnapshot((doc) => {
+      setRtStatus('connected');
+      if (!doc.exists) return;
+      const prev = roomData;
+      roomData = doc.data();
+      isHost   = roomData.hostId === myUid;
+
+      // ステータス変化のみ更新があった時はリセット
+      if (prev && prev.status !== roomData.status) {
+        resultsInitialized = false;
+      }
+
+      updateHeaderStatus();
+      updateUI();
+      firstRoom = false;
+    }, () => { setRtStatus('connecting'); });
+
+    // プレイヤーリスナー
+    unsubPlayers = db.collection(ROOMS_COLLECTION).doc(roomId)
+      .collection('players').onSnapshot((snap) => {
+        players = {};
+        snap.forEach(doc => { players[doc.id] = doc.data(); });
+        updateUI();
+      }, () => { setRtStatus('connecting'); });
+
+    // ヘッダー更新
+    document.getElementById('header-room-code').textContent = roomId;
+    saveHistory({ id: roomId });
+    showOverlay('app');
+    renderIcons();
+  }
+
+  function updateHeaderStatus() {
+    const el = document.getElementById('header-status');
+    if (!el || !roomData) return;
+    el.textContent = roomData.status === 'finished' ? '結果発表中' : 'ゲーム進行中';
+  }
+
+  function updateUI() {
+    if (!roomData) return;
+    const isFinished = roomData.status === 'finished';
+    setAppPhase(isFinished ? 'results' : 'playing');
+    if (isFinished) {
+      renderResultsPhase();
+    } else {
+      renderPlayingPhase();
+    }
+  }
+
+  // ---- 参加登録 ---- //
+
+  async function registerPlayer() {
+    const nameEl  = document.getElementById('join-name');
+    const chipsEl = document.getElementById('join-chips');
+    const errEl   = document.getElementById('join-error');
+    const name    = nameEl.value.trim();
+    const chips   = parseInt(chipsEl.value) || 0;
+
+    errEl.style.display = 'none';
+    if (!name)     { errEl.textContent = '名前を入力してください'; errEl.style.display = 'block'; return; }
+    if (chips <= 0) { errEl.textContent = '初期チップ数を入力してください'; errEl.style.display = 'block'; return; }
+
+    const { db } = initFirebase();
+    try {
+      await db.collection(ROOMS_COLLECTION).doc(roomId).collection('players').doc(myUid).set({
+        name,
+        buyInChips: chips,
+        finalChips: null,
+        joinedAt:   firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      startListeners();
+    } catch (err) {
+      errEl.textContent = '参加に失敗しました: ' + (err.message || '');
+      errEl.style.display = 'block';
+    }
+  }
+
+  // ---- プレイ中フェーズ ---- //
+
+  function renderPlayingPhase() {
+    const entries = getSortedPlayers();
+    const listEl  = document.getElementById('player-list');
+    document.getElementById('player-count').textContent = entries.length;
+
+    if (entries.length === 0) {
+      listEl.innerHTML = `<div class="empty-state">
+        <div class="icon"><i data-lucide="users" width="44" height="44"></i></div>
+        <p>参加者を待っています…</p>
+      </div>`;
+    } else {
+      listEl.innerHTML = entries.map(([uid, p]) => {
+        const isMe  = uid === myUid;
+        const isH   = uid === roomData?.hostId;
+        return `<div class="player-row ${isMe ? 'my-row' : ''}">
+          <div class="avatar" style="background:${colorFor(p.name)}">${initials(p.name)}</div>
+          <div class="player-meta">
+            <div class="player-name-text">
+              ${esc(p.name)}
+              ${isMe ? '<span class="you-badge">自分</span>' : ''}
+              ${isH  ? '<span class="host-badge">ホスト</span>' : ''}
+            </div>
+            <div class="player-buyin-text">
+              Buy-in: <span class="buyin-chips-val">${(p.buyInChips || 0).toLocaleString()}</span> chips
+            </div>
+          </div>
+          ${isMe ? `<button class="btn-add-buyin" onclick="openBuyInModal()">
+            <i data-lucide="plus" width="14" height="14"></i>追加
+          </button>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    // ホストのみ終了ボタン表示
+    document.getElementById('end-game-wrap').classList.toggle('hidden', !isHost);
+    renderIcons();
+  }
+
+  // ---- ゲーム終了 ---- //
+
+  async function endGame() {
+    if (!isHost) return;
+    if (!confirm('ゲームを終了しますか？\n全員の画面が最終チップ数入力に切り替わります。')) return;
+    const { db } = initFirebase();
+    try {
+      await db.collection(ROOMS_COLLECTION).doc(roomId).update({ status: 'finished' });
+    } catch (err) {
+      showToast('エラーが発生しました');
+    }
+  }
+
+  // ---- Buy-in追加 ---- //
+
+  function openBuyInModal() {
+    document.getElementById('buyin-modal').classList.remove('hidden');
+    setTimeout(() => {
+      const inp = document.getElementById('buyin-amount');
+      inp.focus(); inp.select();
+    }, 100);
+    renderIcons();
+  }
+
+  function closeBuyInModal() {
+    document.getElementById('buyin-modal').classList.add('hidden');
+  }
+
+  function handleBuyInBackdrop(e) {
+    if (e.target === document.getElementById('buyin-modal')) closeBuyInModal();
+  }
+
+  function setBuyInAmount(v) {
+    document.getElementById('buyin-amount').value = v;
+  }
+
+  async function confirmBuyIn() {
+    const amount = parseInt(document.getElementById('buyin-amount').value) || 0;
+    if (amount <= 0) { showToast('チップ数を入力してください'); return; }
+    closeBuyInModal();
+    const { db } = initFirebase();
+    try {
+      await db.collection(ROOMS_COLLECTION).doc(roomId).collection('players').doc(myUid).update({
+        buyInChips: firebase.firestore.FieldValue.increment(amount),
+      });
+      showToast(`${amount.toLocaleString()} chips を追加しました`);
+    } catch (err) {
+      showToast('更新に失敗しました');
+    }
+  }
+
+  // ---- 結果フェーズ ---- //
+
+  function getSortedPlayers() {
+    return Object.entries(players).sort((a, b) => {
+      const ta = a[1].joinedAt?.seconds || 0;
+      const tb = b[1].joinedAt?.seconds || 0;
+      return ta - tb;
+    });
+  }
+
+  function renderResultsPhase() {
+    // 自分の入力中の値を保持
+    const activeEl         = document.activeElement;
+    const wasMyInput       = activeEl && activeEl.id === 'my-final-input';
+    const savedInputValue  = wasMyInput ? activeEl.value : null;
+
+    const entries    = getSortedPlayers();
+    const resultsEl  = document.getElementById('results-list');
+    const myFinal    = players[myUid]?.finalChips;
+
+    resultsEl.innerHTML = entries.map(([uid, p]) => {
+      const isMe  = uid === myUid;
+      const isH   = uid === roomData?.hostId;
+      const buyIn = p.buyInChips || 0;
+      const hasFinal = p.finalChips !== null && p.finalChips !== undefined;
+      const final    = hasFinal ? p.finalChips : '';
+      const diff     = hasFinal ? p.finalChips - buyIn : null;
+
+      let finalCell = '';
+      if (isMe) {
+        const displayVal = savedInputValue !== null ? savedInputValue : (hasFinal ? final : '');
+        finalCell = `<input id="my-final-input" class="final-chips-input" type="number"
+          value="${esc(String(displayVal))}" placeholder="最終チップ数" min="0"
+          onblur="saveFinalChips()"
+          onkeydown="if(event.key==='Enter'){this.blur();}">`;
+      } else if (hasFinal) {
+        finalCell = `<span class="final-chips-display">${Number(final).toLocaleString()}</span>`;
+      } else {
+        finalCell = `<span class="waiting-text">未入力</span>`;
+      }
+
+      let diffHtml = '';
+      if (diff !== null) {
+        const cls  = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'zero';
+        const sign = diff > 0 ? '+' : '';
+        diffHtml = `<span class="diff-val ${cls}">${sign}${diff.toLocaleString()}</span>`;
+      } else if (isMe) {
+        // 自分が入力中: 入力値からリアルタイム計算
+        const currentInput = savedInputValue !== null ? savedInputValue : '';
+        const parsed = parseInt(currentInput);
+        if (!isNaN(parsed) && parsed >= 0) {
+          const d    = parsed - buyIn;
+          const cls  = d > 0 ? 'positive' : d < 0 ? 'negative' : 'zero';
+          const sign = d > 0 ? '+' : '';
+          diffHtml = `<span class="diff-val ${cls}">${sign}${d.toLocaleString()}</span>`;
+        }
+      }
+
+      return `<div class="result-row ${isMe ? 'my-row' : ''}">
+        <div class="avatar" style="background:${colorFor(p.name)}">${initials(p.name)}</div>
+        <div class="result-meta">
+          <div class="player-name-text">
+            ${esc(p.name)}
+            ${isMe ? '<span class="you-badge">自分</span>' : ''}
+            ${isH  ? '<span class="host-badge">ホスト</span>' : ''}
+          </div>
+          <div class="result-buyin">Buy-in: ${buyIn.toLocaleString()} chips</div>
+        </div>
+        <div class="result-right">
+          ${finalCell}
+          ${diffHtml}
+        </div>
+      </div>`;
+    }).join('');
+
+    // フォーカス復元
+    if (wasMyInput) {
+      const newInput = document.getElementById('my-final-input');
+      if (newInput) {
+        newInput.value = savedInputValue;
+        newInput.focus();
+        try {
+          const len = savedInputValue.length;
+          newInput.setSelectionRange(len, len);
+        } catch {}
+      }
+    }
+
+    renderConsistencyCheck();
+    renderIcons();
+    resultsInitialized = true;
+  }
+
+  // 最終チップ数を保存
+  async function saveFinalChips() {
+    const input = document.getElementById('my-final-input');
+    if (!input) return;
+    const value = parseInt(input.value);
+    if (isNaN(value) || value < 0) { showToast('正しいチップ数を入力してください'); return; }
+    const { db } = initFirebase();
+    try {
+      await db.collection(ROOMS_COLLECTION).doc(roomId).collection('players').doc(myUid).update({
+        finalChips: value,
+      });
+    } catch (err) {
+      showToast('保存に失敗しました');
+    }
+  }
+
+  // 整合性チェック
+  function renderConsistencyCheck() {
+    const card    = document.getElementById('consistency-card');
+    if (!card) return;
+    const entries = getSortedPlayers();
+    const total   = entries.length;
+    const entered = entries.filter(([, p]) => p.finalChips !== null && p.finalChips !== undefined);
+
+    if (entered.length < total) {
+      card.innerHTML = `<div class="consistency-title">
+        <i data-lucide="shield" width="13" height="13"></i>チップ保全チェック
+      </div>
+      <div class="consistency-value pending">
+        <span>入力待ち (${entered.length} / ${total} 人)</span>
+        <i data-lucide="clock" width="18" height="18"></i>
+      </div>
+      <p class="consistency-note">全員が最終チップ数を入力すると整合性を確認できます</p>`;
+      renderIcons();
+      return;
+    }
+
+    const totalDiff = entered.reduce((s, [, p]) => s + (p.finalChips - (p.buyInChips || 0)), 0);
+
+    if (totalDiff === 0) {
+      card.innerHTML = `<div class="consistency-title">
+        <i data-lucide="shield-check" width="13" height="13"></i>チップ保全チェック
+      </div>
+      <div class="consistency-value ok">
+        <span>差分合計: ±0 chips</span>
+        <i data-lucide="check-circle" width="22" height="22"></i>
+      </div>
+      <p class="consistency-note">チップの合計が一致しています。精算完了！</p>`;
+    } else {
+      const sign = totalDiff > 0 ? '+' : '';
+      card.innerHTML = `<div class="consistency-title">
+        <i data-lucide="shield-alert" width="13" height="13"></i>チップ保全チェック
+      </div>
+      <div class="consistency-value ng">
+        <span>差分合計: ${sign}${totalDiff.toLocaleString()} chips</span>
+        <i data-lucide="alert-triangle" width="22" height="22"></i>
+      </div>
+      <p class="consistency-note">チップ数の合計が合いません。入力値を確認してください（チップの紛失・水増しがないか）。</p>`;
+    }
+    renderIcons();
+  }
+
+  // ---- ヘッダーアクション ---- //
+
+  async function copyRoomCode() {
+    try { await navigator.clipboard.writeText(roomId); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = roomId; ta.style.cssText = 'position:fixed;top:-9999px';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
+    showToast('ルームコードをコピーしました');
+  }
+
+  async function shareRoom() {
+    const url = location.origin + location.pathname + '?room=' + roomId;
+    try { await navigator.clipboard.writeText(url); }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.cssText = 'position:fixed;top:-9999px';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
+    showToast('共有URLをコピーしました');
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeBuyInModal();
+  });
+</script>
+</body>
+</html>
