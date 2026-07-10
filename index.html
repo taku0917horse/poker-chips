@@ -47,8 +47,16 @@
 
   header {
     background: linear-gradient(135deg, var(--grad-start) 0%, var(--grad-end) 100%);
-    color: white; padding: 32px 20px 28px; text-align: center;
+    color: white; padding: 32px 20px 28px; text-align: center; position: relative;
   }
+  .header-rules-link {
+    position: absolute; top: 14px; right: 16px;
+    color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 600;
+    text-decoration: none; background: rgba(255,255,255,0.18);
+    border-radius: 8px; padding: 5px 12px;
+    display: flex; align-items: center; gap: 4px; transition: background 0.15s;
+  }
+  .header-rules-link:active { background: rgba(255,255,255,0.35); }
   .header-logo {
     display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 6px;
   }
@@ -135,6 +143,40 @@
   }
   .room-del:active { background: #fee2e2; color: var(--danger); }
 
+  .settings-section {
+    background: white; border-radius: 16px;
+    padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .settings-toggle {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none;
+  }
+  .settings-toggle-label {
+    font-size: 12px; font-weight: 700; color: var(--subtext);
+    text-transform: uppercase; letter-spacing: 0.8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .settings-toggle-arrow {
+    font-size: 14px; color: var(--subtext); transition: transform 0.2s;
+  }
+  .settings-toggle-arrow.open { transform: rotate(180deg); }
+  .settings-body { margin-top: 12px; display: none; }
+  .settings-body.open { display: block; }
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .settings-field label {
+    display: block; font-size: 11px; font-weight: 700; color: var(--subtext);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+  }
+  .settings-field input, .settings-field select {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 14px; font-weight: 600; color: var(--text); background: white;
+    outline: none; transition: border-color 0.2s; font-family: inherit;
+    -webkit-appearance: none; appearance: none;
+  }
+  .settings-field input:focus, .settings-field select:focus {
+    border-color: var(--primary); box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+  }
+
   .toast {
     position: fixed; bottom: 30px; left: 50%;
     transform: translateX(-50%) translateY(20px);
@@ -158,6 +200,9 @@
 
 <div id="main">
   <header>
+    <a href="rules.html" class="header-rules-link">
+      <i data-lucide="book-open" width="13" height="13"></i>ルール
+    </a>
     <div class="header-logo">
       <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <circle cx="16" cy="16" r="14" fill="white" opacity="0.95"/>
@@ -174,6 +219,43 @@
   </header>
 
   <div class="content">
+
+    <!-- ゲーム設定 -->
+    <div class="settings-section">
+      <div class="settings-toggle" onclick="toggleSettings()">
+        <span class="settings-toggle-label">
+          <i data-lucide="settings" width="13" height="13"></i>
+          ゲーム設定
+        </span>
+        <span class="settings-toggle-arrow" id="settings-arrow">▼</span>
+      </div>
+      <div class="settings-body" id="settings-body">
+        <div class="settings-grid">
+          <div class="settings-field">
+            <label>SB チップ数</label>
+            <input id="setting-sb" type="number" value="50" min="1">
+          </div>
+          <div class="settings-field">
+            <label>BB チップ数</label>
+            <input id="setting-bb" type="number" value="100" min="1">
+          </div>
+          <div class="settings-field">
+            <label>初期スタック</label>
+            <input id="setting-stack" type="number" value="1000" min="1">
+          </div>
+          <div class="settings-field">
+            <label>タイムバンク</label>
+            <select id="setting-timebank">
+              <option value="0">なし</option>
+              <option value="30">30秒</option>
+              <option value="60">60秒</option>
+              <option value="90">90秒</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <button class="btn-create" onclick="createRoom()">
       <i data-lucide="plus-circle" width="22" height="22"></i>
       新しいゲームを作成
@@ -253,6 +335,14 @@
     location.href = 'room.html?room=' + code;
   }
 
+  // ---- 設定パネル開閉 ----
+  function toggleSettings() {
+    const body  = document.getElementById('settings-body');
+    const arrow = document.getElementById('settings-arrow');
+    const open  = body.classList.toggle('open');
+    arrow.classList.toggle('open', open);
+  }
+
   // ---- ルーム作成 ----
   async function createRoom() {
     document.getElementById('overlay-loading').classList.remove('hidden');
@@ -261,6 +351,13 @@
     try {
       const user      = await ensureAuth();
       const { db }    = initFirebase();
+
+      const settings = {
+        smallBlind: parseInt(document.getElementById('setting-sb').value)    || 50,
+        bigBlind:   parseInt(document.getElementById('setting-bb').value)    || 100,
+        startStack: parseInt(document.getElementById('setting-stack').value) || 1000,
+        timeBank:   parseInt(document.getElementById('setting-timebank').value) || 0,
+      };
 
       // 重複しない6桁コードを生成（最大5回試行）
       let code;
@@ -274,6 +371,7 @@
       await db.collection(ROOMS_COLLECTION).doc(code).set({
         hostId:    user.uid,
         status:    'active',
+        settings,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
 

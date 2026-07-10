@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#16a34a">
+<title>ルール - PokerChips</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700&display=swap">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --primary: #16a34a; --primary-dark: #15803d;
+  --grad-start: #16a34a; --grad-end: #0891b2;
+  --danger: #dc2626; --info: #1e40af;
+  --bg: #f0fdf4; --card: #fff;
+  --text: #1e293b; --subtext: #64748b;
+  --border: #e2e8f0; --shadow: 0 2px 16px rgba(0,0,0,0.07);
+}
+body {
+  font-family: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh;
+  padding-bottom: 48px;
+}
+
+header {
+  background: linear-gradient(135deg, var(--grad-start) 0%, var(--grad-end) 100%);
+  color: white; padding: 13px 16px 12px;
+  display: flex; align-items: center; gap: 10px;
+  position: sticky; top: 0; z-index: 50;
+}
+.header-back {
+  background: rgba(255,255,255,0.18); border: none; color: white;
+  border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 600;
+  cursor: pointer; text-decoration: none;
+  display: flex; align-items: center; gap: 4px; font-family: inherit; transition: background 0.15s;
+}
+.header-back:active { background: rgba(255,255,255,0.35); }
+.header-title { font-size: 17px; font-weight: 700; }
+
+.content { padding: 20px 16px 0; max-width: 520px; margin: 0 auto; }
+
+.section-card {
+  background: var(--card); border-radius: 16px;
+  padding: 20px; box-shadow: var(--shadow); margin-bottom: 16px;
+}
+.section-title {
+  font-size: 14px; font-weight: 700; color: var(--primary);
+  margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  padding-bottom: 10px; border-bottom: 2px solid #dcfce7;
+}
+
+/* action descriptions */
+.action-list { display: flex; flex-direction: column; gap: 10px; }
+.action-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px; border-radius: 12px; background: #f8faff;
+}
+.action-badge {
+  flex-shrink: 0; padding: 3px 10px; border-radius: 8px;
+  font-size: 12px; font-weight: 700; min-width: 60px; text-align: center;
+}
+.ab-check  { background: #f0fdf4; color: var(--primary); border: 1.5px solid #bbf7d0; }
+.ab-fold   { background: #fff0f0; color: var(--danger); }
+.ab-call   { background: #1e40af; color: white; }
+.ab-bet    { background: #7c3aed; color: white; }
+.ab-raise  { background: #7c3aed; color: white; }
+.ab-allin  { background: var(--danger); color: white; }
+.action-desc { font-size: 13px; color: var(--text); line-height: 1.6; }
+.action-desc strong { color: var(--text); }
+
+/* order diagram */
+.order-diagram {
+  background: #1e293b; border-radius: 14px; padding: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.order-row {
+  display: flex; align-items: center; gap: 10px;
+  color: white; font-size: 13px;
+}
+.order-pos {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; flex-shrink: 0;
+}
+.pos-d  { background: #f59e0b; }
+.pos-sb { background: #0ea5e9; }
+.pos-bb { background: #7c3aed; }
+.pos-utg { background: #16a34a; }
+.pos-rest { background: #475569; }
+.order-label { font-weight: 600; }
+.order-note  { font-size: 12px; color: rgba(255,255,255,0.6); margin-top: 1px; }
+.order-arrow { color: #fbbf24; font-size: 12px; }
+
+/* street flow */
+.street-flow {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.street-box {
+  background: #1e293b; color: #fbbf24;
+  border-radius: 10px; padding: 8px 14px;
+  font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+}
+.street-arrow {
+  color: var(--subtext); font-size: 18px; flex-shrink: 0;
+}
+.street-detail {
+  margin-top: 12px; font-size: 13px; color: var(--subtext); line-height: 1.8;
+}
+.street-detail span { color: #fbbf24; font-weight: 700; }
+
+/* hand rankings */
+.hand-table { width: 100%; border-collapse: collapse; }
+.hand-table th {
+  text-align: left; font-size: 11px; font-weight: 700; color: var(--subtext);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 6px 8px; border-bottom: 2px solid var(--border);
+}
+.hand-table td {
+  padding: 10px 8px; border-bottom: 1px solid var(--border);
+  font-size: 13px; vertical-align: top;
+}
+.hand-table tr:last-child td { border-bottom: none; }
+.hand-rank {
+  display: inline-block; background: var(--primary); color: white;
+  border-radius: 6px; padding: 1px 7px; font-size: 11px; font-weight: 700;
+  margin-right: 6px; min-width: 24px; text-align: center;
+}
+.hand-name { font-weight: 700; display: flex; align-items: center; }
+.hand-ex { color: var(--subtext); font-size: 12px; margin-top: 2px; }
+.cards { font-size: 15px; letter-spacing: 2px; }
+.suit-s { color: #1e293b; }
+.suit-h { color: #dc2626; }
+.suit-d { color: #dc2626; }
+.suit-c { color: #16a34a; }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="index.html" class="header-back">
+    <i data-lucide="arrow-left" width="16" height="16"></i>戻る
+  </a>
+  <span class="header-title">♠ ルール・役一覧</span>
+</header>
+
+<div class="content">
+
+  <!-- アクション説明 -->
+  <div class="section-card">
+    <div class="section-title">
+      <i data-lucide="zap" width="16" height="16"></i>
+      アクション説明
+    </div>
+    <div class="action-list">
+      <div class="action-item">
+        <span class="action-badge ab-check">チェック</span>
+        <div class="action-desc">ベットがない場合、チップを払わずにパスする。全員がチェックするとストリートが終了。</div>
+      </div>
+      <div class="action-item">
+        <span class="action-badge ab-fold">フォールド</span>
+        <div class="action-desc">ハンドを捨てて降りる。そのハンドへの参加権を失うが、以降の損失もない。</div>
+      </div>
+      <div class="action-item">
+        <span class="action-badge ab-call">コール</span>
+        <div class="action-desc">直前のベット/レイズ額と同額を支払って続ける。</div>
+      </div>
+      <div class="action-item">
+        <span class="action-badge ab-bet">ベット</span>
+        <div class="action-desc">このストリートで最初にチップを賭ける。他のプレイヤーはコール・レイズ・フォールドを迫られる。</div>
+      </div>
+      <div class="action-item">
+        <span class="action-badge ab-raise">レイズ</span>
+        <div class="action-desc">直前のベットをさらに上乗せして賭ける。最低レイズ額はBBサイズ（または直前のレイズ幅）以上。</div>
+      </div>
+      <div class="action-item">
+        <span class="action-badge ab-allin">オールイン</span>
+        <div class="action-desc">所持チップを全て賭ける。コール額がスタックを上回る場合は自動的にオールイン。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ベッティング順 -->
+  <div class="section-card">
+    <div class="section-title">
+      <i data-lucide="arrow-right-circle" width="16" height="16"></i>
+      ベッティング順（アクション順）
+    </div>
+    <div class="order-diagram">
+      <div class="order-row">
+        <div class="order-pos pos-d">D</div>
+        <div>
+          <div class="order-label">ディーラー（ボタン）</div>
+          <div class="order-note">毎ハンド時計回りに移動</div>
+        </div>
+      </div>
+      <div class="order-row"><span class="order-arrow" style="margin-left:6px">↓ プリフロップ</span></div>
+      <div class="order-row">
+        <div class="order-pos pos-sb">SB</div>
+        <div>
+          <div class="order-label">スモールブラインド</div>
+          <div class="order-note">ディーラーの左隣。強制ベット（SB額）</div>
+        </div>
+      </div>
+      <div class="order-row">
+        <div class="order-pos pos-bb">BB</div>
+        <div>
+          <div class="order-label">ビッグブラインド</div>
+          <div class="order-note">SBの左隣。強制ベット（BB額）。最後にアクション権あり</div>
+        </div>
+      </div>
+      <div class="order-row">
+        <div class="order-pos pos-utg">UTG</div>
+        <div>
+          <div class="order-label">アンダーザガン（最初のアクション）</div>
+          <div class="order-note">BBの左隣。プリフロップで最初にアクション</div>
+        </div>
+      </div>
+      <div class="order-row"><span class="order-arrow" style="margin-left:6px">↓ フロップ以降</span></div>
+      <div class="order-row">
+        <div class="order-pos pos-sb">SB</div>
+        <div>
+          <div class="order-label">フロップ以降の最初のアクション</div>
+          <div class="order-note">ディーラーの左隣（SB位置）から時計回り</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ハンドの流れ -->
+  <div class="section-card">
+    <div class="section-title">
+      <i data-lucide="play-circle" width="16" height="16"></i>
+      ハンドの流れ
+    </div>
+    <div class="street-flow">
+      <div class="street-box">PREFLOP</div>
+      <span class="street-arrow">→</span>
+      <div class="street-box">FLOP</div>
+      <span class="street-arrow">→</span>
+      <div class="street-box">TURN</div>
+      <span class="street-arrow">→</span>
+      <div class="street-box">RIVER</div>
+      <span class="street-arrow">→</span>
+      <div class="street-box" style="color:#4ade80">SHOWDOWN</div>
+    </div>
+    <div class="street-detail">
+      <span>PREFLOP</span>: 各自2枚の手札を配る。UTGから時計回りにアクション。<br>
+      <span>FLOP</span>: 共有カード3枚オープン。SBから時計回りにアクション。<br>
+      <span>TURN</span>: 共有カード4枚目オープン。同じくSBから。<br>
+      <span>RIVER</span>: 共有カード5枚目オープン。同じくSBから。<br>
+      <span>SHOWDOWN</span>: 残ったプレイヤーで手札を公開し最強の手を比べる。
+    </div>
+  </div>
+
+  <!-- 役一覧 -->
+  <div class="section-card">
+    <div class="section-title">
+      <i data-lucide="trophy" width="16" height="16"></i>
+      役一覧（強い順）
+    </div>
+    <table class="hand-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>役名</th>
+          <th>例</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="hand-rank">1</span></td>
+          <td>
+            <div class="hand-name">ロイヤルフラッシュ</div>
+            <div class="hand-ex">同スートの A K Q J 10</div>
+          </td>
+          <td class="cards"><span class="suit-h">A♥ K♥ Q♥ J♥ 10♥</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">2</span></td>
+          <td>
+            <div class="hand-name">ストレートフラッシュ</div>
+            <div class="hand-ex">同スートの連番5枚</div>
+          </td>
+          <td class="cards"><span class="suit-s">9♠ 8♠ 7♠ 6♠ 5♠</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">3</span></td>
+          <td>
+            <div class="hand-name">フォーカード</div>
+            <div class="hand-ex">同じ数字4枚</div>
+          </td>
+          <td class="cards"><span class="suit-h">K♥</span><span class="suit-d">K♦</span><span class="suit-s">K♠</span><span class="suit-c">K♣</span><span class="suit-h"> 2♥</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">4</span></td>
+          <td>
+            <div class="hand-name">フルハウス</div>
+            <div class="hand-ex">スリーカード + ワンペア</div>
+          </td>
+          <td class="cards"><span class="suit-h">Q♥</span><span class="suit-d">Q♦</span><span class="suit-s">Q♠</span><span class="suit-h"> J♥</span><span class="suit-d">J♦</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">5</span></td>
+          <td>
+            <div class="hand-name">フラッシュ</div>
+            <div class="hand-ex">同スートの5枚</div>
+          </td>
+          <td class="cards"><span class="suit-d">A♦ J♦ 8♦ 5♦ 2♦</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">6</span></td>
+          <td>
+            <div class="hand-name">ストレート</div>
+            <div class="hand-ex">連番5枚（スート不問）</div>
+          </td>
+          <td class="cards"><span class="suit-s">8♠</span><span class="suit-h">7♥</span><span class="suit-d">6♦</span><span class="suit-c">5♣</span><span class="suit-s">4♠</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">7</span></td>
+          <td>
+            <div class="hand-name">スリーカード</div>
+            <div class="hand-ex">同じ数字3枚</div>
+          </td>
+          <td class="cards"><span class="suit-h">7♥</span><span class="suit-d">7♦</span><span class="suit-s">7♠</span><span class="suit-c"> K♣</span><span class="suit-h"> 3♥</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">8</span></td>
+          <td>
+            <div class="hand-name">ツーペア</div>
+            <div class="hand-ex">異なる数字のペア × 2</div>
+          </td>
+          <td class="cards"><span class="suit-h">A♥</span><span class="suit-d">A♦</span><span class="suit-s"> 9♠</span><span class="suit-h">9♥</span><span class="suit-c"> 4♣</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">9</span></td>
+          <td>
+            <div class="hand-name">ワンペア</div>
+            <div class="hand-ex">同じ数字2枚</div>
+          </td>
+          <td class="cards"><span class="suit-c">J♣</span><span class="suit-s">J♠</span><span class="suit-h"> A♥</span><span class="suit-d"> 7♦</span><span class="suit-c"> 3♣</span></td>
+        </tr>
+        <tr>
+          <td><span class="hand-rank">10</span></td>
+          <td>
+            <div class="hand-name">ハイカード</div>
+            <div class="hand-ex">役なし。最も高いカードで比べる</div>
+          </td>
+          <td class="cards"><span class="suit-h">A♥</span><span class="suit-s"> J♠</span><span class="suit-d"> 8♦</span><span class="suit-c"> 5♣</span><span class="suit-h"> 2♥</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+  if (window.lucide) lucide.createIcons();
+  window.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) lucide.createIcons();
+  });
+</script>
+</body>
+</html>

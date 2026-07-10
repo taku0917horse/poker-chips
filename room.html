@@ -189,8 +189,11 @@ header {
 }
 .you-badge  { background: var(--primary); color: white; }
 .host-badge { background: #f59e0b; color: white; }
-.allin-badge { background: #7c3aed; color: white; }
+.allin-badge  { background: #7c3aed; color: white; }
 .folded-badge { background: var(--subtext); color: white; }
+.dealer-badge { background: #f59e0b; color: white; }
+.sb-badge     { background: #0ea5e9; color: white; }
+.bb-badge     { background: #7c3aed; color: white; }
 
 /* start hand */
 .start-hand-section {
@@ -454,6 +457,9 @@ header {
     </div>
     <div class="header-right">
       <div id="rt-dot" class="rt-dot connecting"></div>
+      <a href="rules.html" class="share-btn" style="text-decoration:none">
+        <i data-lucide="book-open" width="14" height="14"></i>ルール
+      </a>
       <button class="share-btn" onclick="shareRoom()">
         <i data-lucide="link" width="14" height="14"></i>共有
       </button>
@@ -725,6 +731,8 @@ async function loadRoom() {
         return;
       }
       document.getElementById('join-room-code').textContent = roomId;
+      const defaultStack = roomData?.settings?.startStack;
+      if (defaultStack) document.getElementById('join-chips').value = defaultStack;
       showOverlay('join'); renderIcons();
       setTimeout(() => document.getElementById('join-name').focus(), 150);
       return;
@@ -845,6 +853,10 @@ function renderPlayingPhase() {
   const curTurnUid = handActive && !showdown && gs.currentTurnIndex >= 0
     ? gs.turnOrder?.[gs.currentTurnIndex] : null;
 
+  const turnOrder  = gs?.turnOrder || [];
+  const dealerIdx  = gs?.dealerButtonIndex;
+  const tn         = turnOrder.length;
+
   if (entries.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--subtext);font-size:14px">参加者を待っています…</div>';
   } else {
@@ -860,6 +872,17 @@ function renderPlayingPhase() {
                         : p.status === 'folded' ? '<span class="badge folded-badge">FOLD</span>' : '';
       const betInfo = handActive
         ? `<div class="bet-val">ベット: ${(p.currentBet || 0).toLocaleString()}</div>` : '';
+
+      let positionBadges = '';
+      if (handActive && dealerIdx != null && tn > 0) {
+        const oi = turnOrder.indexOf(uid);
+        if (oi >= 0) {
+          if (oi === dealerIdx % tn)              positionBadges += '<span class="badge dealer-badge">D</span>';
+          if (tn >= 2 && oi === (dealerIdx + 1) % tn) positionBadges += '<span class="badge sb-badge">SB</span>';
+          if (tn >= 3 && oi === (dealerIdx + 2) % tn) positionBadges += '<span class="badge bb-badge">BB</span>';
+        }
+      }
+
       return `<div class="player-row ${stCls}">
         ${isCur ? '<span class="turn-arrow">▶</span>' : ''}
         <div class="avatar" style="background:${colorFor(p.name)}">${initials(p.name)}</div>
@@ -868,6 +891,7 @@ function renderPlayingPhase() {
             ${esc(p.name)}
             ${isMe ? '<span class="badge you-badge">自分</span>' : ''}
             ${isH  ? '<span class="badge host-badge">ホスト</span>' : ''}
+            ${positionBadges}
             ${statusBadge}
           </div>
           ${betInfo}
@@ -940,6 +964,18 @@ async function startNewHand() {
   const batch   = db.batch();
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
   const order   = entries.map(([uid]) => uid);
+  const n       = order.length;
+
+  // ディーラーボタンを1つ進める
+  const prevGs      = roomData?.gameState;
+  const prevDealerIdx = (prevGs?.dealerButtonIndex != null) ? prevGs.dealerButtonIndex : -1;
+  const dealerIdx   = (prevDealerIdx + 1) % n;
+
+  // プリフロップ: ヘッズアップ=ディーラーが先行、3人以上=UTG(ディーラー+3)が先行
+  const preflopStart = n <= 2 ? dealerIdx : (dealerIdx + 3) % n;
+
+  // ビッグブラインド設定（最低レイズ額の基準）
+  const bb = roomData?.settings?.bigBlind || 0;
 
   order.forEach(uid => {
     batch.update(roomRef.collection('players').doc(uid), {
@@ -949,8 +985,10 @@ async function startNewHand() {
 
   batch.update(roomRef, {
     gameState: {
-      street: 'preflop', pot: 0, currentBetAmount: 0, minRaise: 0,
-      turnOrder: order, currentTurnIndex: 0,
+      street: 'preflop', pot: 0, currentBetAmount: 0, minRaise: bb,
+      turnOrder: order, dealerButtonIndex: dealerIdx,
+      actionCloserId: null,
+      currentTurnIndex: preflopStart,
       handActive: true, showdown: false,
     },
   });
@@ -959,8 +997,9 @@ async function startNewHand() {
 
 // ---- アクション共通: 次状態計算 & バッチ書き込み ----
 function buildTransition(batch, roomRef, gs, updPlayers, potDelta) {
-  // 全プレイヤー(fold/sittingOut除く)
-  const inHand = (gs.turnOrder || []).filter(uid => {
+  const order  = gs.turnOrder || [];
+  const n      = order.length;
+  const inHand = order.filter(uid => {
     const p = updPlayers[uid];
     return p && p.status !== 'folded' && p.status !== 'sittingOut';
   });
@@ -984,15 +1023,26 @@ function buildTransition(batch, roomRef, gs, updPlayers, potDelta) {
 
   batch.update(roomRef, { 'gameState.pot': newPot });
 
+  // 次のアクティブプレイヤーインデックスを先に計算
+  let ni = ((gs.currentTurnIndex || 0) + 1) % n;
+  for (let i = 0; i < n; i++) {
+    if (updPlayers[order[ni]]?.status === 'active') break;
+    ni = (ni + 1) % n;
+  }
+
   // ストリート完了チェック
-  const streetDone = active.length === 0 ||
+  // 1. 全員がアクト済み かつ ベット額が揃っている（アグレッションなし）
+  // 2. アグレッサー(actionCloserId)まで一周した（コール/フォールドで返ってきた）
+  const noActive = active.length === 0;
+  const returnedToAggressor = gs.actionCloserId != null && order[ni] === gs.actionCloserId;
+  const allActedNoAggression = gs.actionCloserId == null &&
     active.every(uid => {
       const p = updPlayers[uid];
       return p.hasActedThisRound && (p.currentBet || 0) === (gs.currentBetAmount || 0);
     });
+  const streetDone = noActive || returnedToAggressor || allActedNoAggression;
 
   if (streetDone) {
-    // 次ストリートへ or ショーダウン
     const streets = ['preflop', 'flop', 'turn', 'river'];
     const nextIdx = streets.indexOf(gs.street) + 1;
     inHand.forEach(uid => {
@@ -1004,26 +1054,28 @@ function buildTransition(batch, roomRef, gs, updPlayers, potDelta) {
       batch.update(roomRef, {
         'gameState.currentBetAmount': 0, 'gameState.minRaise': 0,
         'gameState.currentTurnIndex': -1, 'gameState.showdown': true,
+        'gameState.actionCloserId': null,
       });
       return { type: 'showdown' };
     } else {
-      const firstActive = gs.turnOrder.findIndex(uid => updPlayers[uid]?.status === 'active');
+      // フロップ以降: ディーラーの次のアクティブプレイヤーから
+      const dealerIdx = gs.dealerButtonIndex != null ? gs.dealerButtonIndex : 0;
+      let firstActive = -1;
+      for (let i = 0; i < n; i++) {
+        const idx = (dealerIdx + 1 + i) % n;
+        if (updPlayers[order[idx]]?.status === 'active') { firstActive = idx; break; }
+      }
+      const bb = roomData?.settings?.bigBlind || 0;
       batch.update(roomRef, {
         'gameState.street': streets[nextIdx],
-        'gameState.currentBetAmount': 0, 'gameState.minRaise': 0,
+        'gameState.currentBetAmount': 0, 'gameState.minRaise': bb,
         'gameState.currentTurnIndex': firstActive >= 0 ? firstActive : 0,
+        'gameState.actionCloserId': null,
       });
       return { type: 'next_street', street: streets[nextIdx] };
     }
   }
 
-  // 次のアクティブプレイヤーへ
-  const order = gs.turnOrder;
-  let ni = ((gs.currentTurnIndex || 0) + 1) % order.length;
-  for (let i = 0; i < order.length; i++) {
-    if (updPlayers[order[ni]]?.status === 'active') break;
-    ni = (ni + 1) % order.length;
-  }
   batch.update(roomRef, { 'gameState.currentTurnIndex': ni });
   return { type: 'next_turn', turnIndex: ni };
 }
@@ -1111,7 +1163,7 @@ async function actionAllIn() {
     const pUpd     = { stack: 0, currentBet: newBet, status: 'allin', hasActedThisRound: true };
     batch.update(roomRef.collection('players').doc(myUid), pUpd);
     const upd = { ...players, [myUid]: { ...me, ...pUpd } };
-    // レイズの場合は他のアクティブプレイヤーのhasActedをリセット
+    // レイズの場合は他のアクティブプレイヤーのhasActedをリセット & actionCloserIdを設定
     if (isRaise) {
       gs.turnOrder.forEach(uid => {
         if (uid !== myUid && upd[uid]?.status === 'active') {
@@ -1122,8 +1174,10 @@ async function actionAllIn() {
       batch.update(roomRef, {
         'gameState.currentBetAmount': newBet,
         'gameState.minRaise': Math.max(gs.minRaise || 0, newBet - (gs.currentBetAmount || 0)),
+        'gameState.actionCloserId': myUid,
       });
       gs.currentBetAmount = newBet;
+      gs.actionCloserId   = myUid;
     }
     const result = buildTransition(batch, roomRef, gs, upd, allInAmt);
     await batch.commit();
@@ -1213,8 +1267,9 @@ async function confirmBet() {
     batch.update(roomRef, {
       'gameState.currentBetAmount': totalBet,
       'gameState.minRaise': Math.max(gs.minRaise || 0, raiseSize),
+      'gameState.actionCloserId': myUid,
     });
-    const gsUpd = { ...gs, currentBetAmount: totalBet, minRaise: Math.max(gs.minRaise || 0, raiseSize) };
+    const gsUpd = { ...gs, currentBetAmount: totalBet, minRaise: Math.max(gs.minRaise || 0, raiseSize), actionCloserId: myUid };
     const result = buildTransition(batch, roomRef, gsUpd, upd, betIncrement);
     await batch.commit();
     if (result.type === 'autowin') showToast(`${players[result.winner]?.name || ''} が ${result.pot.toLocaleString()} chips を獲得！`);
