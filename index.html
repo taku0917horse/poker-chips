@@ -167,6 +167,15 @@
     display: block; font-size: 11px; font-weight: 700; color: var(--subtext);
     text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
   }
+  .radio-group { display: flex; gap: 10px; margin-top: 2px; }
+  .radio-item {
+    flex: 1; display: flex; align-items: center; gap: 7px; cursor: pointer;
+    padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 13px; font-weight: 600; color: var(--text);
+    transition: all 0.15s; user-select: none;
+  }
+  .radio-item:has(input:checked) { border-color: var(--primary); background: #f0fdf4; color: var(--primary); }
+  .radio-item input[type=radio] { accent-color: var(--primary); width: 15px; height: 15px; -webkit-appearance: auto; appearance: auto; padding: 0; flex-shrink: 0; }
   .settings-field input, .settings-field select {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
     font-size: 14px; font-weight: 600; color: var(--text); background: white;
@@ -230,7 +239,24 @@
         <span class="settings-toggle-arrow" id="settings-arrow">▼</span>
       </div>
       <div class="settings-body" id="settings-body">
-        <div class="settings-grid">
+
+        <!-- ベッティング方式 -->
+        <div class="settings-field" style="margin-bottom:12px">
+          <label>ベッティング方式</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="bettingType" value="blinds" checked onchange="onBettingTypeChange()">
+              <span>ブラインド方式</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="bettingType" value="ante" onchange="onBettingTypeChange()">
+              <span>アンティ方式</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- ブラインド設定 -->
+        <div id="blinds-settings" class="settings-grid">
           <div class="settings-field">
             <label>SB チップ数</label>
             <input id="setting-sb" type="number" value="50" min="1">
@@ -239,20 +265,24 @@
             <label>BB チップ数</label>
             <input id="setting-bb" type="number" value="100" min="1">
           </div>
+        </div>
+
+        <!-- アンティ設定 -->
+        <div id="ante-settings" style="display:none;margin-bottom:2px">
           <div class="settings-field">
-            <label>初期スタック</label>
-            <input id="setting-stack" type="number" value="1000" min="1">
-          </div>
-          <div class="settings-field">
-            <label>タイムバンク</label>
-            <select id="setting-timebank">
-              <option value="0">なし</option>
-              <option value="30">30秒</option>
-              <option value="60">60秒</option>
-              <option value="90">90秒</option>
-            </select>
+            <label>アンティ額</label>
+            <input id="setting-ante" type="number" value="50" min="1">
           </div>
         </div>
+
+        <!-- 共通 -->
+        <div class="settings-grid" style="margin-top:10px">
+          <div class="settings-field">
+            <label>開始チップ数（全員共通）</label>
+            <input id="setting-stack" type="number" value="1000" min="1">
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -343,21 +373,30 @@
     arrow.classList.toggle('open', open);
   }
 
+  function onBettingTypeChange() {
+    const type = document.querySelector('input[name="bettingType"]:checked').value;
+    document.getElementById('blinds-settings').style.display = type === 'blinds' ? '' : 'none';
+    document.getElementById('ante-settings').style.display   = type === 'ante'   ? '' : 'none';
+  }
+
   // ---- ルーム作成 ----
   async function createRoom() {
     document.getElementById('overlay-loading').classList.remove('hidden');
     document.getElementById('main').classList.add('hidden');
 
     try {
-      const user      = await ensureAuth();
-      const { db }    = initFirebase();
+      const user        = await ensureAuth();
+      const { db }      = initFirebase();
+      const bettingType = document.querySelector('input[name="bettingType"]:checked').value;
+      const initialStack = parseInt(document.getElementById('setting-stack').value) || 1000;
 
-      const settings = {
-        smallBlind: parseInt(document.getElementById('setting-sb').value)    || 50,
-        bigBlind:   parseInt(document.getElementById('setting-bb').value)    || 100,
-        startStack: parseInt(document.getElementById('setting-stack').value) || 1000,
-        timeBank:   parseInt(document.getElementById('setting-timebank').value) || 0,
-      };
+      const settings = { bettingType, initialStack };
+      if (bettingType === 'blinds') {
+        settings.smallBlind = parseInt(document.getElementById('setting-sb').value)   || 50;
+        settings.bigBlind   = parseInt(document.getElementById('setting-bb').value)   || 100;
+      } else {
+        settings.anteAmount = parseInt(document.getElementById('setting-ante').value) || 50;
+      }
 
       // 重複しない6桁コードを生成（最大5回試行）
       let code;
@@ -371,6 +410,8 @@
       await db.collection(ROOMS_COLLECTION).doc(code).set({
         hostId:    user.uid,
         status:    'active',
+        gamePhase: 'waiting',
+        handNumber: 1,
         settings,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
