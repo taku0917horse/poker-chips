@@ -3,12 +3,12 @@
 // ============================================================
 
 const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyBJiK4ehCuVW0-eRFH5Ew7L-e2KcKGKfZo",
-  authDomain:        "warikan-app-c48cb.firebaseapp.com",
-  projectId:         "warikan-app-c48cb",
-  storageBucket:     "warikan-app-c48cb.firebasestorage.app",
-  messagingSenderId: "68284401289",
-  appId:             "1:68284401289:web:3bd22bfd8788bf95b52858",
+  apiKey:            "AIzaSyA2Rvg5X6ovEJzPnYHCvinXcPibFKBgCc8",
+  authDomain:        "poker-chips-7faad.firebaseapp.com",
+  projectId:         "poker-chips-7faad",
+  storageBucket:     "poker-chips-7faad.firebasestorage.app",
+  messagingSenderId: "527611619333",
+  appId:             "1:527611619333:web:9d2e478149ba38a613946c",
 };
 
 const ROOMS_COLLECTION  = 'poker_rooms';
