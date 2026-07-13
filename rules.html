@@ -139,9 +139,9 @@ header {
 <body>
 
 <header>
-  <a href="index.html" class="header-back">
+  <button id="back-btn" class="header-back">
     <i data-lucide="arrow-left" width="16" height="16"></i>戻る
-  </a>
+  </button>
   <span class="header-title">♠ ルール・役一覧</span>
 </header>
 
@@ -359,6 +359,11 @@ header {
   if (window.lucide) lucide.createIcons();
   window.addEventListener('DOMContentLoaded', () => {
     if (window.lucide) lucide.createIcons();
+    const raw = new URLSearchParams(location.search).get('from') || '';
+    const from = (raw.startsWith('index.html') || raw.startsWith('room.html')) ? raw : null;
+    document.getElementById('back-btn').onclick = () => {
+      if (from) { location.href = from; } else { history.back(); }
+    };
   });
 </script>
 </body>

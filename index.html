@@ -209,7 +209,7 @@
 
 <div id="main">
   <header>
-    <a href="rules.html" class="header-rules-link">
+    <a href="rules.html?from=index.html" class="header-rules-link">
       <i data-lucide="book-open" width="13" height="13"></i>ルール
     </a>
     <div class="header-logo">
@@ -381,6 +381,7 @@
 
   // ---- ルーム作成 ----
   async function createRoom() {
+    history.pushState({ creating: true }, '');
     document.getElementById('overlay-loading').classList.remove('hidden');
     document.getElementById('main').classList.add('hidden');
 
@@ -420,6 +421,7 @@
       location.href = 'room.html?room=' + code;
     } catch (err) {
       console.error('createRoom error:', err);
+      history.replaceState(null, '');
       document.getElementById('overlay-loading').classList.add('hidden');
       document.getElementById('main').classList.remove('hidden');
       showToast('作成に失敗しました: ' + (err.message || ''));
@@ -436,8 +438,17 @@
       return;
     }
     initFirebase();
+    toggleSettings();
     renderHistory();
     renderIcons();
+  });
+
+  window.addEventListener('popstate', () => {
+    const overlay = document.getElementById('overlay-loading');
+    if (!overlay.classList.contains('hidden')) {
+      overlay.classList.add('hidden');
+      document.getElementById('main').classList.remove('hidden');
+    }
   });
 
   document.addEventListener('keydown', e => {
