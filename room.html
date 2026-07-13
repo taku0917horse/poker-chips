@@ -459,6 +459,61 @@ header {
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 [data-lucide] { display: inline-block; vertical-align: middle; }
+
+/* street overlay */
+.street-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.52); pointer-events: none;
+  opacity: 0; transition: opacity 0.35s;
+}
+.street-overlay.show { opacity: 1; }
+.street-overlay-box {
+  background: #1e293b; color: #fbbf24;
+  border-radius: 20px; padding: 26px 44px;
+  font-size: 21px; font-weight: 700; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4); letter-spacing: 0.5px;
+}
+
+/* game info bar */
+.game-info-bar {
+  margin: 8px 16px 0; background: #f1f5f9;
+  border-radius: 10px; padding: 7px 12px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.game-info-label { font-size: 12px; font-weight: 700; color: var(--subtext); }
+.game-hist-open-btn {
+  font-size: 12px; font-weight: 600; color: var(--primary);
+  background: none; border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  font-family: inherit; padding: 0;
+}
+.game-hist-open-btn:active { opacity: 0.65; }
+
+/* game history modal */
+.game-hist-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.game-hist-row:last-child { border-bottom: none; }
+.game-hist-num {
+  font-size: 13px; font-weight: 700; color: var(--primary);
+  margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+}
+.current-game-badge {
+  font-size: 10px; background: #fbbf24; color: #1e293b;
+  padding: 1px 7px; border-radius: 8px; font-weight: 700;
+}
+.game-hist-player-row {
+  display: flex; justify-content: space-between;
+  font-size: 12px; color: var(--subtext); padding: 2px 0;
+}
+
+/* multi-game result breakdown */
+.result-breakdown { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.breakdown-tag {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+}
+.breakdown-tag.pos  { background: #dcfce7; color: var(--success); }
+.breakdown-tag.neg  { background: #fee2e2; color: var(--danger); }
+.breakdown-tag.zero { background: #f1f5f9; color: var(--subtext); }
 </style>
 </head>
 <body>
@@ -535,6 +590,14 @@ header {
   <!-- プレイ中フェーズ -->
   <div id="phase-playing" class="hidden">
 
+    <!-- ゲーム情報バー -->
+    <div id="game-info-bar" class="game-info-bar hidden">
+      <span id="game-info-num" class="game-info-label">ゲーム #1</span>
+      <button class="game-hist-open-btn" onclick="openGameHistory()">
+        <i data-lucide="clock" width="12" height="12"></i>履歴を見る
+      </button>
+    </div>
+
     <!-- ハンド情報バー -->
     <div id="hand-info-bar" class="hand-info-bar hidden">
       <span class="hand-info-num" id="hand-info-num">ハンド #1</span>
@@ -583,8 +646,8 @@ header {
         <button class="btn-start-hand" onclick="startHand()">
           <i data-lucide="play" width="20" height="20"></i>ハンド開始
         </button>
-        <button class="btn-end-game" onclick="endGame()">
-          <i data-lucide="flag" width="18" height="18"></i>ゲームを終了する
+        <button class="btn-end-game" onclick="endDay()">
+          <i data-lucide="flag" width="18" height="18"></i>本日のゲームを完全に終了する
         </button>
       </div>
       <!-- playing / after hand done: 次のハンドへ -->
@@ -749,6 +812,24 @@ header {
   </div>
 </div>
 
+<!-- ゲーム履歴モーダル -->
+<div id="game-history-modal" class="modal-overlay hidden" onclick="handleGameHistBackdrop(event)">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">ゲーム履歴</span>
+      <button class="modal-close" onclick="closeGameHistory()">
+        <i data-lucide="x" width="22" height="22"></i>
+      </button>
+    </div>
+    <div id="game-history-content"></div>
+  </div>
+</div>
+
+<!-- ストリート移行オーバーレイ -->
+<div id="street-overlay" class="street-overlay">
+  <div class="street-overlay-box" id="street-overlay-text"></div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script>
@@ -761,6 +842,10 @@ let isHost       = false;
 let isActing     = false;
 let unsubRoom    = null;
 let unsubPlayers = null;
+let gamesData    = [];   // games サブコレクション [{id, gameNumber, status, results, ...}]
+let unsubGames   = null;
+let prevStreet   = null; // ストリート移行検知用
+let streetOverlayTimer = null;
 
 // ---- フェーズ管理 ----
 function showOverlay(name) {
@@ -857,6 +942,13 @@ function startListeners() {
       updateUI();
     }, () => setRtStatus('connecting'));
 
+  unsubGames = db.collection(ROOMS_COLLECTION).doc(roomId)
+    .collection('games').orderBy('gameNumber')
+    .onSnapshot((snap) => {
+      gamesData = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateUI();
+    }, (err) => console.warn('games listener:', err));
+
   document.getElementById('header-room-code').textContent = roomId;
   const rulesLink = document.getElementById('rules-link');
   if (rulesLink) rulesLink.href = 'rules.html?from=' + encodeURIComponent('room.html?room=' + roomId);
@@ -889,6 +981,10 @@ function updateUI() {
   }
   setAppPhase('playing');
   renderPlayingPhase();
+  // ベットモーダルが開いていれば表示値をリアルタイム更新
+  if (!document.getElementById('bet-modal').classList.contains('hidden')) {
+    updateBetModalDisplay();
+  }
 }
 
 // ---- 参加登録 ----
@@ -937,6 +1033,24 @@ function renderPlayingPhase() {
   const showdown   = gs?.showdown   === true;
   const myPlayer   = players[myUid];
   const settings   = roomData?.settings || {};
+
+  // --- ストリート移行検知 ---
+  const curStreet = handActive ? (gs?.street || null) : null;
+  if (curStreet && prevStreet !== null && curStreet !== prevStreet) {
+    showStreetOverlay(curStreet);
+  }
+  prevStreet = curStreet;
+
+  // --- ゲーム情報バー ---
+  const currentGameNum = roomData?.currentGameNumber || 1;
+  const settledCount   = gamesData.filter(g => g.status === 'settled').length;
+  const gameInfoBar    = document.getElementById('game-info-bar');
+  if (currentGameNum > 1 || settledCount > 0) {
+    document.getElementById('game-info-num').textContent = `ゲーム #${currentGameNum}`;
+    gameInfoBar.classList.remove('hidden');
+  } else {
+    gameInfoBar.classList.add('hidden');
+  }
 
   // --- ハンド情報バー ---
   const handInfoBar = document.getElementById('hand-info-bar');
@@ -1051,11 +1165,17 @@ function renderPlayingPhase() {
     const zeroPlayers = getSortedPlayers().filter(([, p]) => (p.stack || 0) === 0);
     if (zeroPlayers.length > 0) {
       const names = zeroPlayers.map(([, p]) => esc(p.name)).join('・');
-      zeroAlert.innerHTML = `<div class="zero-stack-banner-text">⚠️ ${names} のチップが0になりました</div>
-        <button class="btn-end-game" onclick="endGame()">
-          <i data-lucide="flag" width="18" height="18"></i>ゲームを終了する
-        </button>`;
+      zeroAlert.innerHTML = `<div class="zero-stack-banner-text">⚠️ ${names}のチップが0になりました</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+          <button class="btn-next-hand" onclick="settleAndNextGame()" style="font-size:14px">
+            <i data-lucide="refresh-cw" width="16" height="16"></i>この回を清算して次のゲームへ
+          </button>
+          <button class="btn-end-game" onclick="endDay()">
+            <i data-lucide="flag" width="16" height="16"></i>本日のゲームを完全に終了する
+          </button>
+        </div>`;
       zeroAlert.classList.remove('hidden');
+      renderIcons();
     } else {
       zeroAlert.classList.add('hidden');
     }
@@ -1465,37 +1585,54 @@ async function actionAllIn() {
 }
 
 // ---- ベット/レイズモーダル ----
-function openBetModal() {
+// ---- ベット額パラメータ（常に最新のroomData/playersから計算） ----
+function getBetParams() {
   const gs = roomData?.gameState;
   const me = players[myUid];
-  if (!gs || !me) return;
-  const pot   = gs.pot || 0;
-  const myBet = me.currentBet || 0;
-  const cur   = gs.currentBetAmount || 0;
-  const myStack = me.stack || 0;
+  if (!gs || !me) return null;
+  const pot        = gs.pot || 0;
+  const myBet      = me.currentBet || 0;
+  const cur        = gs.currentBetAmount || 0;
+  const myStack    = me.stack || 0;
   const isFirstBet = cur === 0;
-  const minTotal = isFirstBet ? 1 : cur + (gs.minRaise || cur);
-  const maxTotal = myBet + myStack;
+  const minTotal   = isFirstBet ? 1 : cur + (gs.minRaise || cur);
+  const maxTotal   = myBet + myStack;
+  return { pot, myBet, cur, myStack, isFirstBet, minTotal, maxTotal };
+}
 
-  document.getElementById('bet-modal-title').textContent = isFirstBet ? 'ベット' : 'レイズ';
-  document.getElementById('bm-pot').textContent   = pot.toLocaleString();
-  document.getElementById('bm-stack').textContent = myStack.toLocaleString();
+function updateBetModalDisplay() {
+  const p = getBetParams();
+  if (!p) return;
+  document.getElementById('bm-pot').textContent   = p.pot.toLocaleString();
+  document.getElementById('bm-stack').textContent = p.myStack.toLocaleString();
   const mrRow = document.getElementById('bm-minraise-row');
-  if (!isFirstBet) {
+  if (!p.isFirstBet) {
     mrRow.style.display = '';
-    document.getElementById('bm-minraise').textContent = minTotal.toLocaleString();
+    document.getElementById('bm-minraise').textContent = p.minTotal.toLocaleString();
   } else {
     mrRow.style.display = 'none';
   }
-  document.getElementById('bet-amount-input').value = minTotal;
-  document.getElementById('bet-amount-input').min   = minTotal;
+  document.getElementById('bet-amount-input').min = p.minTotal;
+  // クイックボタン金額を最新値で再計算
+  const half = Math.max(p.minTotal, p.myBet + Math.ceil(p.pot / 2));
+  const full = Math.max(p.minTotal, p.myBet + p.pot);
+  const twox = Math.max(p.minTotal, p.cur * 2 || p.minTotal * 2);
+  document.getElementById('bq-half').textContent  = `½ポット (${half.toLocaleString()})`;
+  document.getElementById('bq-pot').textContent   = `ポット (${full.toLocaleString()})`;
+  document.getElementById('bq-2x').textContent    = `2倍 (${twox.toLocaleString()})`;
+  document.getElementById('bq-allin').textContent = `オールイン (${p.maxTotal.toLocaleString()})`;
+  document.getElementById('bq-half').onclick  = () => { document.getElementById('bet-amount-input').value = half; };
+  document.getElementById('bq-pot').onclick   = () => { document.getElementById('bet-amount-input').value = full; };
+  document.getElementById('bq-2x').onclick    = () => { document.getElementById('bet-amount-input').value = twox; };
+  document.getElementById('bq-allin').onclick = () => { document.getElementById('bet-amount-input').value = p.maxTotal; };
+}
 
-  // クイックボタン
-  document.getElementById('bq-half').onclick  = () => { document.getElementById('bet-amount-input').value = Math.max(minTotal, myBet + Math.ceil(pot/2)); };
-  document.getElementById('bq-pot').onclick   = () => { document.getElementById('bet-amount-input').value = Math.max(minTotal, myBet + pot); };
-  document.getElementById('bq-2x').onclick    = () => { document.getElementById('bet-amount-input').value = Math.max(minTotal, cur * 2 || minTotal * 2); };
-  document.getElementById('bq-allin').onclick = () => { document.getElementById('bet-amount-input').value = maxTotal; };
-
+function openBetModal() {
+  const p = getBetParams();
+  if (!p) return;
+  document.getElementById('bet-modal-title').textContent = p.isFirstBet ? 'ベット' : 'レイズ';
+  document.getElementById('bet-amount-input').value = p.minTotal;
+  updateBetModalDisplay();
   document.getElementById('bet-modal').classList.remove('hidden');
   setTimeout(() => { const i = document.getElementById('bet-amount-input'); i.focus(); i.select(); }, 100);
   renderIcons();
@@ -1603,39 +1740,134 @@ async function confirmWinners() {
   showToast(`${names} が ${pot.toLocaleString()} chips を獲得！`);
 }
 
-// ---- ゲーム終了 ----
-async function endGame() {
+// ---- ゲーム清算・次ゲームへ ----
+async function settleAndNextGame() {
   if (!isHost) return;
-  if (!confirm('ゲームを終了しますか？\n全員が最終結果画面に移行します。')) return;
-  const { db } = initFirebase();
+  const currentGameNum = roomData?.currentGameNumber || 1;
+  if (!confirm(`ゲーム#${currentGameNum}を清算して次のゲームへ進みますか？`)) return;
+  const { db }          = initFirebase();
+  const roomRef         = db.collection(ROOMS_COLLECTION).doc(roomId);
+  const initialStack    = roomData?.settings?.initialStack || 1000;
+  const results         = {};
+  getSortedPlayers().forEach(([uid, p]) => {
+    results[uid] = {
+      name:       p.name,
+      buyIn:      p.buyInChips  || initialStack,
+      finalStack: p.stack       || 0,
+      diff:       (p.stack || 0) - (p.buyInChips || initialStack),
+    };
+  });
   try {
-    await db.collection(ROOMS_COLLECTION).doc(roomId).update({
-      status: 'finished',
-      gamePhase: 'finished',
+    await roomRef.collection('games').doc(String(currentGameNum)).set(
+      { gameNumber: currentGameNum, status: 'settled', endedAt: firebase.firestore.FieldValue.serverTimestamp(), results },
+      { merge: true }
+    );
+    const newGameNum = currentGameNum + 1;
+    const batch      = db.batch();
+    getSortedPlayers().forEach(([uid]) => {
+      batch.update(roomRef.collection('players').doc(uid), {
+        stack: initialStack, buyInChips: initialStack,
+        currentBet: 0, status: 'active', hasActedThisRound: false,
+      });
     });
-  } catch (err) { showToast('エラーが発生しました'); }
+    batch.set(roomRef.collection('games').doc(String(newGameNum)), {
+      gameNumber: newGameNum, status: 'playing',
+      startedAt: firebase.firestore.FieldValue.serverTimestamp(), results: {},
+    });
+    batch.update(roomRef, {
+      currentGameNumber: newGameNum,
+      gamePhase: 'waiting', handNumber: 1,
+      lastAction: firebase.firestore.FieldValue.delete(),
+      'gameState.handActive': false, 'gameState.showdown': false,
+      'gameState.pot': 0, 'gameState.currentBetAmount': 0,
+      'gameState.currentTurnIndex': -1, 'gameState.actionCloserId': null,
+    });
+    await batch.commit();
+    showToast(`ゲーム#${newGameNum}を開始します！`);
+  } catch (err) { console.error(err); showToast('エラーが発生しました'); }
+}
+
+// ---- 本日終了 ----
+async function endDay() {
+  if (!isHost) return;
+  if (!confirm('本日のゲームを完全に終了しますか？\n全員が最終結果画面に移行します。')) return;
+  const { db }          = initFirebase();
+  const roomRef         = db.collection(ROOMS_COLLECTION).doc(roomId);
+  const currentGameNum  = roomData?.currentGameNumber || 1;
+  const initialStack    = roomData?.settings?.initialStack || 1000;
+  const results         = {};
+  getSortedPlayers().forEach(([uid, p]) => {
+    results[uid] = {
+      name:       p.name,
+      buyIn:      p.buyInChips  || initialStack,
+      finalStack: p.stack       || 0,
+      diff:       (p.stack || 0) - (p.buyInChips || initialStack),
+    };
+  });
+  try {
+    await roomRef.collection('games').doc(String(currentGameNum)).set(
+      { gameNumber: currentGameNum, status: 'settled', endedAt: firebase.firestore.FieldValue.serverTimestamp(), results },
+      { merge: true }
+    );
+    await roomRef.update({ dayStatus: 'finished', status: 'finished', gamePhase: 'finished' });
+  } catch (err) { console.error(err); showToast('エラーが発生しました'); }
 }
 
 // ---- 結果フェーズ ----
-function renderResultsPhase() {
-  const entries    = getSortedPlayers();
-  const handNumber = roomData?.handNumber || 1;
+function buildAggregatedResults(entries, settledGames) {
+  const aggr = {};
+  entries.forEach(([uid, p]) => {
+    aggr[uid] = { name: p.name, totalDiff: 0, games: [] };
+  });
+  settledGames.forEach(g => {
+    Object.entries(g.results || {}).forEach(([uid, r]) => {
+      if (aggr[uid]) {
+        aggr[uid].totalDiff += r.diff || 0;
+        aggr[uid].games.push({ gameNum: g.gameNumber, diff: r.diff || 0 });
+      }
+    });
+  });
+  return aggr;
+}
 
-  // ヘッダー統計
+function renderResultsPhase() {
+  const entries      = getSortedPlayers();
+  const currentGameNum = roomData?.currentGameNumber || 1;
+  const settledGames = gamesData.filter(g => g.status === 'settled')
+    .sort((a, b) => a.gameNumber - b.gameNumber);
+  const hasMultiGame = settledGames.length > 1;
+  const aggr         = buildAggregatedResults(entries, settledGames);
+
   const totalHandsEl = document.getElementById('result-total-hands');
   const totalPlayEl  = document.getElementById('result-total-players');
-  if (totalHandsEl)  totalHandsEl.textContent  = handNumber;
-  if (totalPlayEl)   totalPlayEl.textContent   = entries.length;
+  if (totalHandsEl) totalHandsEl.textContent = settledGames.length > 1
+    ? `${settledGames.length}ゲーム` : (roomData?.handNumber || 1);
+  if (totalPlayEl)  totalPlayEl.textContent  = entries.length;
 
   const resultsEl = document.getElementById('results-list');
   resultsEl.innerHTML = entries.map(([uid, p]) => {
-    const isMe  = uid === myUid;
-    const isH   = uid === roomData?.hostId;
-    const buyIn = p.buyInChips || 0;
-    const stack = p.stack || 0;
-    const diff  = stack - buyIn;
-    const cls   = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'zero';
-    const sign  = diff > 0 ? '+' : '';
+    const isMe = uid === myUid;
+    const isH  = uid === roomData?.hostId;
+    let diff, subText;
+    if (settledGames.length === 0) {
+      diff    = (p.stack || 0) - (p.buyInChips || 0);
+      subText = `開始: ${(p.buyInChips||0).toLocaleString()} → 最終: ${(p.stack||0).toLocaleString()}`;
+    } else {
+      diff    = aggr[uid]?.totalDiff || 0;
+      subText = `${settledGames.length}ゲーム通算`;
+    }
+    const cls  = diff > 0 ? 'positive' : diff < 0 ? 'negative' : 'zero';
+    const sign = diff > 0 ? '+' : '';
+    let breakdownHTML = '';
+    if (hasMultiGame && (aggr[uid]?.games || []).length > 0) {
+      breakdownHTML = `<div class="result-breakdown">${
+        aggr[uid].games.map(g => {
+          const s = g.diff > 0 ? '+' : '';
+          const c = g.diff > 0 ? 'pos' : g.diff < 0 ? 'neg' : 'zero';
+          return `<span class="breakdown-tag ${c}">G${g.gameNum}: ${s}${g.diff.toLocaleString()}</span>`;
+        }).join('')
+      }</div>`;
+    }
     return `<div class="result-row ${isMe ? 'my-row' : ''}">
       <div class="avatar" style="background:${colorFor(p.name)}">${initials(p.name)}</div>
       <div class="result-meta">
@@ -1644,24 +1876,29 @@ function renderResultsPhase() {
           ${isMe ? '<span class="badge you-badge">自分</span>' : ''}
           ${isH  ? '<span class="badge host-badge">ホスト</span>' : ''}
         </div>
-        <div class="result-buyin">開始: ${buyIn.toLocaleString()} → 最終: ${stack.toLocaleString()}</div>
+        <div class="result-buyin">${subText}</div>
+        ${breakdownHTML}
       </div>
       <div class="result-right">
-        <span class="final-chips-display">${stack.toLocaleString()}</span>
-        <span class="diff-val ${cls}">${sign}${diff.toLocaleString()}</span>
+        <span class="diff-val ${cls}" style="font-size:18px">${sign}${diff.toLocaleString()}</span>
       </div>
     </div>`;
   }).join('');
 
-  renderConsistencyCheck();
+  renderConsistencyCheck(settledGames, aggr);
   renderIcons();
 }
 
-function renderConsistencyCheck() {
+function renderConsistencyCheck(settledGames, aggr) {
   const card = document.getElementById('consistency-card');
   if (!card) return;
-  const entries   = getSortedPlayers();
-  const totalDiff = entries.reduce((s, [, p]) => s + ((p.stack || 0) - (p.buyInChips || 0)), 0);
+  let totalDiff;
+  if (!settledGames || settledGames.length === 0) {
+    const entries = getSortedPlayers();
+    totalDiff = entries.reduce((s, [, p]) => s + ((p.stack || 0) - (p.buyInChips || 0)), 0);
+  } else {
+    totalDiff = Object.values(aggr || {}).reduce((s, a) => s + (a.totalDiff || 0), 0);
+  }
   if (totalDiff === 0) {
     card.innerHTML = `<div class="consistency-title">
       <i data-lucide="shield-check" width="13" height="13"></i>チップ保全チェック
@@ -1810,8 +2047,63 @@ async function shareRoom() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeBetModal(); closeCorrectionPanel(); }
+  if (e.key === 'Escape') { closeBetModal(); closeCorrectionPanel(); closeGameHistory(); }
 });
+
+// ---- ストリート移行オーバーレイ ----
+function showStreetOverlay(street) {
+  const labels = {
+    flop:  'フロップをめくってください',
+    turn:  'ターンをめくってください',
+    river: 'リバーをめくってください',
+  };
+  const msg = labels[street];
+  if (!msg) return;
+  const overlay = document.getElementById('street-overlay');
+  document.getElementById('street-overlay-text').textContent = msg;
+  overlay.classList.add('show');
+  if (streetOverlayTimer) clearTimeout(streetOverlayTimer);
+  streetOverlayTimer = setTimeout(() => overlay.classList.remove('show'), 2800);
+}
+
+// ---- ゲーム履歴 ----
+function openGameHistory() {
+  renderGameHistory();
+  document.getElementById('game-history-modal').classList.remove('hidden');
+  renderIcons();
+}
+function closeGameHistory() {
+  document.getElementById('game-history-modal').classList.add('hidden');
+}
+function handleGameHistBackdrop(e) {
+  if (e.target === document.getElementById('game-history-modal')) closeGameHistory();
+}
+function renderGameHistory() {
+  const el = document.getElementById('game-history-content');
+  if (gamesData.length === 0) {
+    el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--subtext);font-size:14px">ゲーム履歴がありません</div>';
+    return;
+  }
+  const sorted = [...gamesData].sort((a, b) => (b.gameNumber || 0) - (a.gameNumber || 0));
+  el.innerHTML = sorted.map(g => {
+    const isPlaying = g.status === 'playing';
+    const resultRows = Object.entries(g.results || {}).map(([, r]) => {
+      const sign = r.diff > 0 ? '+' : '';
+      const cls  = r.diff > 0 ? 'color:var(--success)' : r.diff < 0 ? 'color:var(--danger)' : 'color:var(--subtext)';
+      return `<div class="game-hist-player-row">
+        <span>${esc(r.name || '?')}</span>
+        <span style="${cls};font-weight:700">${sign}${(r.diff||0).toLocaleString()}</span>
+      </div>`;
+    }).join('');
+    return `<div class="game-hist-row">
+      <div class="game-hist-num">
+        ゲーム #${g.gameNumber}
+        ${isPlaying ? '<span class="current-game-badge">進行中</span>' : ''}
+      </div>
+      ${resultRows || '<div style="font-size:12px;color:var(--subtext)">データなし</div>'}
+    </div>`;
+  }).join('');
+}
 </script>
 </body>
 </html>

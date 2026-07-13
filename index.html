@@ -408,13 +408,22 @@
         if (i === 4) throw new Error('ルームコードの生成に失敗しました。もう一度お試しください。');
       }
 
-      await db.collection(ROOMS_COLLECTION).doc(code).set({
-        hostId:    user.uid,
-        status:    'active',
-        gamePhase: 'waiting',
-        handNumber: 1,
+      const roomRef = db.collection(ROOMS_COLLECTION).doc(code);
+      await roomRef.set({
+        hostId:            user.uid,
+        status:            'active',
+        dayStatus:         'active',
+        gamePhase:         'waiting',
+        handNumber:        1,
+        currentGameNumber: 1,
         settings,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+      await roomRef.collection('games').doc('1').set({
+        gameNumber: 1,
+        status:     'playing',
+        startedAt:  firebase.firestore.FieldValue.serverTimestamp(),
+        results:    {},
       });
 
       saveHistory({ id: code });
