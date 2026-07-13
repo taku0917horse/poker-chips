@@ -560,6 +560,52 @@ header {
   margin-bottom: 8px; padding: 6px 10px;
   background: #f0fdf4; border-radius: 8px;
 }
+
+/* showdown tabs */
+.showdown-tabs {
+  display: flex; gap: 4px; margin-bottom: 16px;
+  background: #f1f5f9; border-radius: 10px; padding: 3px;
+}
+.showdown-tab {
+  flex: 1; padding: 8px 4px; border: none; border-radius: 8px;
+  background: transparent; color: var(--subtext);
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: all 0.15s; font-family: inherit; line-height: 1.3;
+}
+.showdown-tab.active {
+  background: white; color: var(--primary);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+}
+
+/* rank input */
+.rank-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 10px; margin-bottom: 6px;
+  background: #f8faff;
+}
+.rank-player-name { font-size: 14px; font-weight: 600; flex: 1; }
+.rank-select {
+  border: 1.5px solid #bbf7d0; border-radius: 8px;
+  padding: 6px 8px; font-size: 13px; font-weight: 700;
+  color: var(--primary); background: white; cursor: pointer;
+  font-family: inherit; min-width: 64px; -webkit-appearance: auto;
+}
+.rank-select:focus { outline: none; border-color: var(--primary); }
+.btn-rank-preview {
+  width: 100%; padding: 12px; border: 1.5px solid var(--primary); border-radius: 12px;
+  background: white; color: var(--primary); font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+  display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px;
+}
+.btn-rank-preview:active { background: #f0fdf4; transform: scale(0.97); }
+.rank-preview-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 8px; margin-bottom: 4px;
+  background: #f0fdf4; font-size: 13px;
+}
+.rank-preview-label { font-size: 11px; color: var(--subtext); min-width: 68px; }
+.rank-preview-player { font-weight: 600; flex: 1; }
+.rank-preview-amount { font-weight: 700; color: var(--primary); white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -733,11 +779,29 @@ header {
 
       <!-- ホスト用：勝者選択 -->
       <div id="winner-select-host" class="hidden">
-        <div style="font-size:13px;color:var(--subtext);margin-bottom:12px">各ポットの勝者を選択してください（複数選択で山分け）</div>
-        <div id="pot-sections"></div>
-        <button class="btn-confirm-winners" onclick="confirmWinners()">
-          <i data-lucide="check-circle" width="18" height="18"></i>確定・チップを分配
-        </button>
+        <div class="showdown-tabs">
+          <button class="showdown-tab" id="tab-rank" onclick="switchShowdownTab('rank')">順位で入力</button>
+          <button class="showdown-tab" id="tab-manual" onclick="switchShowdownTab('manual')">ポットごとに選択</button>
+        </div>
+
+        <!-- 順位入力モード -->
+        <div id="showdown-rank-mode">
+          <div style="font-size:13px;color:var(--subtext);margin-bottom:12px">各プレイヤーの順位を入力してください（同順位でチョップ）</div>
+          <div id="rank-input-list"></div>
+          <button class="btn-rank-preview" onclick="previewRankDistribution()">
+            <i data-lucide="eye" width="16" height="16"></i>分配プレビューを確認
+          </button>
+          <div id="rank-preview" class="hidden"></div>
+        </div>
+
+        <!-- 手動選択モード -->
+        <div id="showdown-manual-mode" class="hidden">
+          <div style="font-size:13px;color:var(--subtext);margin-bottom:12px">各ポットの勝者を選択してください（複数選択で山分け）</div>
+          <div id="pot-sections"></div>
+          <button class="btn-confirm-winners" onclick="confirmWinners()">
+            <i data-lucide="check-circle" width="18" height="18"></i>確定・チップを分配
+          </button>
+        </div>
       </div>
 
       <!-- 非ホスト用：待機 -->
@@ -1840,11 +1904,77 @@ function calculatePots(playersList) {
   return result;
 }
 
+// ---- ショーダウンタブ管理 ----
+let showdownTab = 'rank';
+let showdownTabHandNum = -1;
+
+function switchShowdownTab(mode) {
+  showdownTab = mode;
+  applyShowdownTab();
+}
+
+function applyShowdownTab() {
+  document.getElementById('showdown-rank-mode')?.classList.toggle('hidden', showdownTab !== 'rank');
+  document.getElementById('showdown-manual-mode')?.classList.toggle('hidden', showdownTab !== 'manual');
+  document.getElementById('tab-rank')?.classList.toggle('active', showdownTab === 'rank');
+  document.getElementById('tab-manual')?.classList.toggle('active', showdownTab === 'manual');
+}
+
+function getNonFoldedUids() {
+  const gs = roomData?.gameState;
+  return (gs?.turnOrder || []).filter(uid => {
+    const p = players[uid];
+    return p && p.status !== 'folded' && p.status !== 'sittingOut';
+  });
+}
+
 // ---- ショーダウン勝者選択 ----
 function renderWinnerCheckboxes() {
   const gs = roomData?.gameState;
-  const pots = gs?.pots && gs.pots.length > 0 ? gs.pots : null;
+  const handNum = roomData?.handNumber || 0;
+  const nonFolded = getNonFoldedUids();
+  const pots = gs?.pots && gs.pots.length > 0
+    ? gs.pots
+    : [{ amount: gs?.pot || 0, eligiblePlayerIds: nonFolded }];
+
+  // タブ初期化（ハンドごとに1回）
+  if (showdownTabHandNum !== handNum) {
+    showdownTabHandNum = handNum;
+    showdownTab = pots.length > 1 ? 'rank' : 'manual';
+    document.getElementById('rank-preview')?.classList.add('hidden');
+  }
+  applyShowdownTab();
+
+  renderRankInputList(nonFolded);
+  renderManualPotSections(pots, gs);
+  renderIcons();
+}
+
+function renderRankInputList(eligibleUids) {
+  const list = document.getElementById('rank-input-list');
+  if (!list) return;
+  const maxRank = eligibleUids.length;
+  list.innerHTML = eligibleUids.map(uid => {
+    const p = players[uid];
+    const statusBadge = p?.status === 'allin'
+      ? ' <span style="font-size:10px;color:#f59e0b;font-weight:700">ALLIN</span>' : '';
+    const opts = `<option value="">-</option>` +
+      Array.from({ length: maxRank }, (_, i) =>
+        `<option value="${i + 1}">${i + 1}位</option>`
+      ).join('');
+    return `<div class="rank-input-row">
+      <div class="avatar" style="background:${colorFor(p?.name || '')};">${initials(p?.name || '?')}</div>
+      <span class="rank-player-name">${esc(p?.name || uid)}${statusBadge}</span>
+      <select class="rank-select" data-uid="${esc(uid)}" onchange="document.getElementById('rank-preview')?.classList.add('hidden')">
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+}
+
+function renderManualPotSections(pots, gs) {
   const potSections = document.getElementById('pot-sections');
+  if (!potSections) return;
 
   function potSectionHTML(pot, i, label) {
     const eligible = pot.eligiblePlayerIds || [];
@@ -1866,10 +1996,11 @@ function renderWinnerCheckboxes() {
     const rows = eligible.map(uid => {
       const p = players[uid];
       const contrib = p?.handContribution || 0;
-      const statusBadge = p?.status === 'allin' ? ' <span style="font-size:10px;color:#f59e0b;font-weight:700">ALLIN</span>' : '';
+      const statusBadge = p?.status === 'allin'
+        ? ' <span style="font-size:10px;color:#f59e0b;font-weight:700">ALLIN</span>' : '';
       return `<label class="winner-check-row">
         <input type="checkbox" class="winner-cb" data-pot="${i}" value="${esc(uid)}">
-        <div class="avatar" style="background:${colorFor(p?.name||'')};">${initials(p?.name||'?')}</div>
+        <div class="avatar" style="background:${colorFor(p?.name || '')};">${initials(p?.name || '?')}</div>
         <span class="winner-check-name">${esc(p?.name || uid)}${statusBadge}</span>
         <span class="winner-check-stack" style="font-size:11px;color:var(--subtext)">投資: ${contrib.toLocaleString()}</span>
       </label>`;
@@ -1880,7 +2011,6 @@ function renderWinnerCheckboxes() {
     </div>`;
   }
 
-  // 各プレイヤーの手札内投資額サマリー（デバッグ兼確認用）
   const contribSummary = (gs?.turnOrder || [])
     .filter(uid => players[uid])
     .map(uid => {
@@ -1892,21 +2022,154 @@ function renderWinnerCheckboxes() {
   const contribHeader = contribSummary
     ? `<div style="font-size:11px;color:var(--subtext);padding:4px 2px 8px;line-height:1.5">${contribSummary}</div>` : '';
 
-  if (pots && pots.length > 1) {
+  if (pots.length > 1) {
     potSections.innerHTML = contribHeader + pots.map((pot, i) =>
       potSectionHTML(pot, i, i === 0 ? 'メインポット' : `サイドポット${i}`)
     ).join('');
   } else {
-    const totalPot = pots ? (pots[0]?.amount || 0) : (gs?.pot || 0);
-    const eligible = pots
-      ? (pots[0]?.eligiblePlayerIds || [])
-      : (gs?.turnOrder || []).filter(uid => {
-          const p = players[uid];
-          return p && p.status !== 'folded' && p.status !== 'sittingOut';
-        });
-    potSections.innerHTML = contribHeader + potSectionHTML({ amount: totalPot, eligiblePlayerIds: eligible }, 0, 'ポット');
+    potSections.innerHTML = contribHeader + potSectionHTML(pots[0], 0, 'ポット');
   }
+}
+
+// ---- 順位入力: プレビュー ----
+function previewRankDistribution() {
+  const gs = roomData?.gameState;
+  if (!gs) return;
+  const nonFolded = getNonFoldedUids();
+  const pots = gs?.pots && gs.pots.length > 0
+    ? gs.pots
+    : [{ amount: gs?.pot || 0, eligiblePlayerIds: nonFolded }];
+
+  // 順位マップ収集
+  const rankMap = {};
+  document.querySelectorAll('.rank-select').forEach(sel => {
+    const uid = sel.dataset.uid;
+    const val = parseInt(sel.value);
+    if (uid && val > 0) rankMap[uid] = val;
+  });
+
+  // バリデーション: 全eligible playerに順位が必要
+  const allEligible = [...new Set(pots.flatMap(p => p.eligiblePlayerIds || []))];
+  const missing = allEligible.filter(uid => !rankMap[uid]);
+  if (missing.length > 0) {
+    showToast(`${missing.map(uid => players[uid]?.name || uid).join('、')}の順位を入力してください`);
+    return;
+  }
+
+  // 分配計算
+  const gains = {};
+  const potBreakdown = [];
+  for (let i = 0; i < pots.length; i++) {
+    const pot = pots[i];
+    const eligible = pot.eligiblePlayerIds || [];
+    if (eligible.length === 0) continue;
+    let winners;
+    if (eligible.length === 1) {
+      winners = eligible;
+    } else {
+      const ranked = eligible.filter(uid => rankMap[uid]).map(uid => ({ uid, rank: rankMap[uid] }));
+      const best = Math.min(...ranked.map(e => e.rank));
+      winners = ranked.filter(e => e.rank === best).map(e => e.uid);
+    }
+    const share = Math.floor(pot.amount / winners.length);
+    const rem   = pot.amount - share * winners.length;
+    winners.forEach((uid, j) => {
+      gains[uid] = (gains[uid] || 0) + share + (j === 0 ? rem : 0);
+    });
+    potBreakdown.push({ pot, i, winners, single: eligible.length === 1 });
+  }
+
+  // プレビューHTML構築
+  const potRows = potBreakdown.map(b => {
+    const label = pots.length > 1 ? (b.i === 0 ? 'メインポット' : `サイドポット${b.i}`) : 'ポット';
+    const names = b.winners.map(uid => esc(players[uid]?.name || uid)).join('・');
+    const perPerson = b.winners.length > 1
+      ? `（${Math.floor(b.pot.amount / b.winners.length).toLocaleString()}×${b.winners.length}）` : '';
+    return `<div class="rank-preview-row">
+      <span class="rank-preview-label">${label}</span>
+      <span class="rank-preview-player">${names}${perPerson ? `<span style="font-size:10px;color:var(--subtext);margin-left:4px">${perPerson}</span>` : ''}</span>
+      <span class="rank-preview-amount">+${b.pot.amount.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+
+  const gainRows = Object.entries(gains)
+    .sort((a, b) => b[1] - a[1])
+    .map(([uid, chips]) => {
+      const p = players[uid];
+      return `<div class="rank-preview-row" style="background:#f8faff">
+        <div class="avatar" style="background:${colorFor(p?.name||'')};width:26px;height:26px;font-size:10px;flex-shrink:0;margin-right:2px">${initials(p?.name||'?')}</div>
+        <span class="rank-preview-player">${esc(p?.name || uid)}</span>
+        <span class="rank-preview-amount">+${chips.toLocaleString()} chips</span>
+      </div>`;
+    }).join('');
+
+  const previewEl = document.getElementById('rank-preview');
+  previewEl.innerHTML = `
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:700;color:var(--subtext);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">ポット別分配</div>
+      ${potRows}
+      <div style="font-size:11px;font-weight:700;color:var(--subtext);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">プレイヤー別合計獲得</div>
+      ${gainRows}
+    </div>
+    <button class="btn-confirm-winners" onclick="confirmRankDistribution()" style="margin-top:12px">
+      <i data-lucide="check-circle" width="18" height="18"></i>確定・チップを分配
+    </button>`;
+  previewEl.classList.remove('hidden');
   renderIcons();
+}
+
+// ---- 順位入力: 確定 ----
+async function confirmRankDistribution() {
+  const gs = roomData?.gameState;
+  if (!gs) return;
+  const nonFolded = getNonFoldedUids();
+  const pots = gs?.pots && gs.pots.length > 0
+    ? gs.pots
+    : [{ amount: gs?.pot || 0, eligiblePlayerIds: nonFolded }];
+
+  const rankMap = {};
+  document.querySelectorAll('.rank-select').forEach(sel => {
+    const uid = sel.dataset.uid;
+    const val = parseInt(sel.value);
+    if (uid && val > 0) rankMap[uid] = val;
+  });
+
+  const { db }  = initFirebase();
+  const batch   = db.batch();
+  const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
+  const toastParts = [];
+
+  for (const pot of pots) {
+    const eligible = pot.eligiblePlayerIds || [];
+    if (eligible.length === 0) continue;
+    let winners;
+    if (eligible.length === 1) {
+      winners = eligible;
+    } else {
+      const ranked = eligible.filter(uid => rankMap[uid]).map(uid => ({ uid, rank: rankMap[uid] }));
+      if (ranked.length === 0) continue;
+      const best = Math.min(...ranked.map(e => e.rank));
+      winners = ranked.filter(e => e.rank === best).map(e => e.uid);
+    }
+    const share = Math.floor(pot.amount / winners.length);
+    const rem   = pot.amount - share * winners.length;
+    winners.forEach((uid, j) => {
+      batch.update(roomRef.collection('players').doc(uid), {
+        stack: firebase.firestore.FieldValue.increment(share + (j === 0 ? rem : 0)),
+      });
+    });
+    const names = winners.map(uid => players[uid]?.name || uid).join('・');
+    toastParts.push(`${names}が${pot.amount.toLocaleString()}chips獲得`);
+  }
+
+  batch.update(roomRef, {
+    gamePhase: 'playing',
+    lastAction: firebase.firestore.FieldValue.delete(),
+    'gameState.handActive': false, 'gameState.showdown': false,
+    'gameState.pot': 0, 'gameState.currentBetAmount': 0, 'gameState.currentTurnIndex': -1,
+  });
+  await batch.commit();
+  showToast(toastParts.join(' / '));
 }
 
 async function confirmWinners() {
