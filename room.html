@@ -1159,7 +1159,7 @@ function renderPlayingPhase() {
     document.getElementById('gs-pot').textContent    = (gs.pot || 0).toLocaleString();
     const callAmt = myPlayer ? Math.max(0, (gs.currentBetAmount || 0) - (myPlayer.currentBet || 0)) : 0;
     document.getElementById('gs-call').textContent   = callAmt.toLocaleString();
-    document.getElementById('gs-mybet').textContent  = myPlayer ? (myPlayer.currentBet || 0).toLocaleString() : '-';
+    document.getElementById('gs-mybet').textContent  = myPlayer ? (myPlayer.handContribution || 0).toLocaleString() : '-';
   } else {
     gsBar.classList.add('hidden');
   }
@@ -1865,11 +1865,13 @@ function renderWinnerCheckboxes() {
     }
     const rows = eligible.map(uid => {
       const p = players[uid];
+      const contrib = p?.handContribution || 0;
+      const statusBadge = p?.status === 'allin' ? ' <span style="font-size:10px;color:#f59e0b;font-weight:700">ALLIN</span>' : '';
       return `<label class="winner-check-row">
         <input type="checkbox" class="winner-cb" data-pot="${i}" value="${esc(uid)}">
         <div class="avatar" style="background:${colorFor(p?.name||'')};">${initials(p?.name||'?')}</div>
-        <span class="winner-check-name">${esc(p?.name || uid)}</span>
-        <span class="winner-check-stack">${(p?.stack || 0).toLocaleString()} chips</span>
+        <span class="winner-check-name">${esc(p?.name || uid)}${statusBadge}</span>
+        <span class="winner-check-stack" style="font-size:11px;color:var(--subtext)">投資: ${contrib.toLocaleString()}</span>
       </label>`;
     }).join('');
     return `<div class="pot-section">
@@ -1878,8 +1880,20 @@ function renderWinnerCheckboxes() {
     </div>`;
   }
 
+  // 各プレイヤーの手札内投資額サマリー（デバッグ兼確認用）
+  const contribSummary = (gs?.turnOrder || [])
+    .filter(uid => players[uid])
+    .map(uid => {
+      const p = players[uid];
+      const c = p.handContribution || 0;
+      const st = p.status === 'allin' ? 'A' : p.status === 'folded' ? 'F' : '';
+      return c > 0 ? `${esc(p.name || uid.slice(-4))}${st ? `(${st})` : ''}: ${c.toLocaleString()}` : null;
+    }).filter(Boolean).join(' | ');
+  const contribHeader = contribSummary
+    ? `<div style="font-size:11px;color:var(--subtext);padding:4px 2px 8px;line-height:1.5">${contribSummary}</div>` : '';
+
   if (pots && pots.length > 1) {
-    potSections.innerHTML = pots.map((pot, i) =>
+    potSections.innerHTML = contribHeader + pots.map((pot, i) =>
       potSectionHTML(pot, i, i === 0 ? 'メインポット' : `サイドポット${i}`)
     ).join('');
   } else {
@@ -1890,7 +1904,7 @@ function renderWinnerCheckboxes() {
           const p = players[uid];
           return p && p.status !== 'folded' && p.status !== 'sittingOut';
         });
-    potSections.innerHTML = potSectionHTML({ amount: totalPot, eligiblePlayerIds: eligible }, 0, 'ポット');
+    potSections.innerHTML = contribHeader + potSectionHTML({ amount: totalPot, eligiblePlayerIds: eligible }, 0, 'ポット');
   }
   renderIcons();
 }
@@ -1922,6 +1936,7 @@ async function confirmWinners() {
     const totalContrib = (gs.turnOrder || []).reduce((s, uid) => s + (players[uid]?.handContribution || 0), 0);
     if (totalContrib > 0 && totalPots !== totalContrib) {
       console.warn(`[confirmWinners] pot mismatch: pots=${totalPots} contribs=${totalContrib}`);
+      showToast(`⚠ ポット計算不一致: pots=${totalPots} vs 投資合計=${totalContrib}`);
     }
     for (let i = 0; i < pots.length; i++) {
       const pot = pots[i];
