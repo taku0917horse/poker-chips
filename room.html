@@ -113,6 +113,7 @@ header {
   font-family: 'Courier New', monospace; font-size: 16px; font-weight: 700;
   letter-spacing: 3px; cursor: pointer; background: rgba(255,255,255,0.15);
   border-radius: 8px; padding: 4px 12px; display: inline-block; transition: opacity 0.15s;
+  white-space: nowrap;
 }
 .header-room-code:active { opacity: 0.5; }
 .header-status { font-size: 11px; opacity: 0.75; margin-top: 2px; }
@@ -131,6 +132,28 @@ header {
   display: flex; align-items: center; gap: 5px; font-family: inherit;
 }
 .share-btn:active { background: rgba(255,255,255,0.38); }
+.header-menu-btn {
+  background: rgba(255,255,255,0.22); border: none; color: white;
+  border-radius: 9px; padding: 5px 11px; cursor: pointer;
+  font-size: 20px; line-height: 1; letter-spacing: 0;
+  display: flex; align-items: center; transition: background 0.15s;
+}
+.header-menu-btn:active { background: rgba(255,255,255,0.38); }
+.header-menu {
+  position: fixed; top: 54px; right: 12px; z-index: 250;
+  background: white; border-radius: 14px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18); min-width: 172px; overflow: hidden;
+}
+.header-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; font-size: 15px; font-weight: 600;
+  color: var(--text); cursor: pointer; border: none; background: none;
+  width: 100%; text-align: left; text-decoration: none; font-family: inherit;
+  transition: background 0.12s; white-space: nowrap;
+}
+.header-menu-item:active { background: #f1f5f9; }
+.header-menu-item.danger { color: var(--danger); }
+.header-menu-separator { height: 1px; background: var(--border); }
 
 /* game state bar */
 .game-state-bar {
@@ -139,11 +162,12 @@ header {
   display: flex; justify-content: space-between; align-items: center; gap: 8px;
 }
 .gs-item { text-align: center; flex: 1; }
-.gs-label { font-size: 10px; opacity: 0.6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.gs-value { font-size: 17px; font-weight: 700; margin-top: 2px; }
-.gs-value.street { color: #fbbf24; font-size: 13px; letter-spacing: 1px; }
+.gs-label { font-size: 9px; opacity: 0.6; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.gs-value { font-size: 15px; font-weight: 700; margin-top: 2px; }
+.gs-value.street { color: #fbbf24; font-size: 12px; letter-spacing: 1px; }
 .gs-value.pot    { color: #4ade80; }
 .gs-value.call   { color: #93c5fd; }
+.gs-value.mybet  { color: #fcd34d; }
 .gs-divider { width: 1px; background: rgba(255,255,255,0.15); align-self: stretch; }
 
 /* cards */
@@ -597,20 +621,26 @@ header {
     </div>
     <div class="header-right">
       <div id="rt-dot" class="rt-dot connecting"></div>
-      <button id="host-fix-btn" class="share-btn hidden" onclick="openCorrectionPanel()">
-        <i data-lucide="wrench" width="14" height="14"></i>修正
-      </button>
-      <a id="rules-link" href="rules.html" class="share-btn" style="text-decoration:none">
-        <i data-lucide="book-open" width="14" height="14"></i>ルール
-      </a>
-      <button class="share-btn" onclick="shareRoom()">
-        <i data-lucide="link" width="14" height="14"></i>共有
-      </button>
-      <button id="exit-btn" class="share-btn hidden" onclick="openExitModal()" style="background:rgba(220,38,38,0.22)">
-        <i data-lucide="log-out" width="14" height="14"></i>退出
-      </button>
+      <button class="header-menu-btn" onclick="toggleHeaderMenu()">⋮</button>
     </div>
   </header>
+
+  <!-- ヘッダーメニュー -->
+  <div id="header-menu" class="header-menu hidden">
+    <button id="menu-fix-btn" class="header-menu-item hidden" onclick="openCorrectionPanel(); closeHeaderMenu()">
+      <i data-lucide="wrench" width="16" height="16"></i>修正
+    </button>
+    <a id="menu-rules-link" href="rules.html" class="header-menu-item" onclick="closeHeaderMenu()">
+      <i data-lucide="book-open" width="16" height="16"></i>ルール
+    </a>
+    <button class="header-menu-item" onclick="shareRoom(); closeHeaderMenu()">
+      <i data-lucide="link" width="16" height="16"></i>共有
+    </button>
+    <div class="header-menu-separator"></div>
+    <button id="menu-exit-btn" class="header-menu-item danger" onclick="openExitModal(); closeHeaderMenu()">
+      <i data-lucide="log-out" width="16" height="16"></i>退出する
+    </button>
+  </div>
 
   <!-- プレイ中フェーズ -->
   <div id="phase-playing" class="hidden">
@@ -644,6 +674,11 @@ header {
       <div class="gs-item">
         <div class="gs-label">コール額</div>
         <div class="gs-value call" id="gs-call">0</div>
+      </div>
+      <div class="gs-divider"></div>
+      <div class="gs-item">
+        <div class="gs-label">自分のBET</div>
+        <div class="gs-value mybet" id="gs-mybet">-</div>
       </div>
     </div>
 
@@ -998,7 +1033,7 @@ function startListeners() {
     }, (err) => console.warn('games listener:', err));
 
   document.getElementById('header-room-code').textContent = roomId;
-  const rulesLink = document.getElementById('rules-link');
+  const rulesLink = document.getElementById('menu-rules-link');
   if (rulesLink) rulesLink.href = 'rules.html?from=' + encodeURIComponent('room.html?room=' + roomId);
   saveHistory({ id: roomId });
   showOverlay('app'); renderIcons();
@@ -1124,6 +1159,7 @@ function renderPlayingPhase() {
     document.getElementById('gs-pot').textContent    = (gs.pot || 0).toLocaleString();
     const callAmt = myPlayer ? Math.max(0, (gs.currentBetAmount || 0) - (myPlayer.currentBet || 0)) : 0;
     document.getElementById('gs-call').textContent   = callAmt.toLocaleString();
+    document.getElementById('gs-mybet').textContent  = myPlayer ? (myPlayer.currentBet || 0).toLocaleString() : '-';
   } else {
     gsBar.classList.add('hidden');
   }
@@ -1154,8 +1190,9 @@ function renderPlayingPhase() {
       const statusBadge = p.status === 'allin'      ? '<span class="badge allin-badge">ALLIN</span>'
                         : p.status === 'folded'     ? '<span class="badge folded-badge">FOLD</span>'
                         : p.status === 'sittingOut' ? '<span class="badge sittingout-badge">退出</span>' : '';
+      const myBetStyle = isMe && (p.currentBet || 0) > 0 ? ' style="font-weight:700;color:var(--primary);font-size:13px"' : '';
       const betInfo = handActive
-        ? `<div class="bet-val">ベット: ${(p.currentBet || 0).toLocaleString()}</div>` : '';
+        ? `<div class="bet-val"${myBetStyle}>ベット: ${(p.currentBet || 0).toLocaleString()}</div>` : '';
 
       let positionBadges = '';
       if (handActive && dealerIdx != null && tn > 0) {
@@ -1233,13 +1270,11 @@ function renderPlayingPhase() {
     zeroAlert.classList.add('hidden');
   }
 
-  // 修正ボタン (ホストのみ)
-  const hostFixBtn = document.getElementById('host-fix-btn');
-  if (hostFixBtn) hostFixBtn.classList.toggle('hidden', !isHost);
-
-  // 退出ボタン (退出済みは非表示)
-  const exitBtn = document.getElementById('exit-btn');
-  if (exitBtn) exitBtn.classList.toggle('hidden', myPlayer?.status === 'sittingOut');
+  // メニュー内ボタン表示制御
+  const menuFixBtn = document.getElementById('menu-fix-btn');
+  if (menuFixBtn) menuFixBtn.classList.toggle('hidden', !isHost);
+  const menuExitBtn = document.getElementById('menu-exit-btn');
+  if (menuExitBtn) menuExitBtn.classList.toggle('hidden', myPlayer?.status === 'sittingOut');
 
   // --- ショーダウンセクション ---
   const showdownSec  = document.getElementById('showdown-section');
@@ -1691,7 +1726,9 @@ function updateBetModalDisplay() {
   // クイックボタン金額を最新値で再計算
   const half = Math.max(p.minTotal, p.myBet + Math.ceil(p.pot / 2));
   const full = Math.max(p.minTotal, p.myBet + p.pot);
-  const twox = Math.max(p.minTotal, p.cur * 2 || p.minTotal * 2);
+  const twox = p.cur > 0
+    ? Math.max(p.minTotal, p.cur * 2)
+    : p.minTotal * 2;
   document.getElementById('bq-half').textContent  = `½ポット (${half.toLocaleString()})`;
   document.getElementById('bq-pot').textContent   = `ポット (${full.toLocaleString()})`;
   document.getElementById('bq-2x').textContent    = `2倍 (${twox.toLocaleString()})`;
@@ -1791,7 +1828,16 @@ function calculatePots(playersList) {
     if (amount > 0) pots.push({ amount, eligiblePlayerIds: eligible });
     prev = level;
   }
-  return pots.length > 0 ? pots : [{ amount: 0, eligiblePlayerIds: [] }];
+  const result = pots.length > 0 ? pots : [{ amount: 0, eligiblePlayerIds: [] }];
+
+  // Debug & validation
+  const totalContrib = contribs.reduce((s, c) => s + c.contrib, 0);
+  const totalPots    = result.reduce((s, p) => s + p.amount, 0);
+  console.log('[pots] input:', contribs.map(c => `${c.uid.slice(-4)}:${c.contrib}(${c.status})`).join(' | '));
+  console.log('[pots] result:', result.map((p, i) => `${i===0?'main':'side'+i}=${p.amount}[${p.eligiblePlayerIds.map(u=>u.slice(-4)).join(',')}]`).join(' | '));
+  console.assert(totalContrib === totalPots, `[pots] MISMATCH contribs=${totalContrib} pots=${totalPots}`);
+
+  return result;
 }
 
 // ---- ショーダウン勝者選択 ----
@@ -1800,24 +1846,42 @@ function renderWinnerCheckboxes() {
   const pots = gs?.pots && gs.pots.length > 0 ? gs.pots : null;
   const potSections = document.getElementById('pot-sections');
 
-  if (pots && pots.length > 1) {
-    potSections.innerHTML = pots.map((pot, i) => {
-      const label = i === 0 ? 'メインポット' : `サイドポット${i}`;
-      const eligible = pot.eligiblePlayerIds || [];
-      const rows = eligible.map(uid => {
-        const p = players[uid];
-        return `<label class="winner-check-row">
-          <input type="checkbox" class="winner-cb" data-pot="${i}" value="${esc(uid)}">
-          <div class="avatar" style="background:${colorFor(p?.name||'')};">${initials(p?.name||'?')}</div>
-          <span class="winner-check-name">${esc(p?.name || uid)}</span>
-          <span class="winner-check-stack">${(p?.stack || 0).toLocaleString()} chips</span>
-        </label>`;
-      }).join('');
+  function potSectionHTML(pot, i, label) {
+    const eligible = pot.eligiblePlayerIds || [];
+    if (eligible.length === 0) {
       return `<div class="pot-section">
         <div class="pot-section-title">${label}: ${pot.amount.toLocaleString()} chips</div>
-        <div class="winner-check-list">${rows || '<div style="color:var(--subtext);font-size:12px;padding:8px">対象プレイヤーなし</div>'}</div>
+        <div style="font-size:12px;color:var(--subtext);padding:6px 0">対象プレイヤーなし</div>
       </div>`;
+    }
+    if (eligible.length === 1) {
+      const name = players[eligible[0]]?.name || eligible[0];
+      return `<div class="pot-section">
+        <div class="pot-section-title">${label}: ${pot.amount.toLocaleString()} chips</div>
+        <div style="font-size:13px;color:var(--success);font-weight:700;padding:6px 0">
+          ✓ 自動付与: ${esc(name)} (+${pot.amount.toLocaleString()})
+        </div>
+      </div>`;
+    }
+    const rows = eligible.map(uid => {
+      const p = players[uid];
+      return `<label class="winner-check-row">
+        <input type="checkbox" class="winner-cb" data-pot="${i}" value="${esc(uid)}">
+        <div class="avatar" style="background:${colorFor(p?.name||'')};">${initials(p?.name||'?')}</div>
+        <span class="winner-check-name">${esc(p?.name || uid)}</span>
+        <span class="winner-check-stack">${(p?.stack || 0).toLocaleString()} chips</span>
+      </label>`;
     }).join('');
+    return `<div class="pot-section">
+      <div class="pot-section-title">${label}: ${pot.amount.toLocaleString()} chips</div>
+      <div class="winner-check-list">${rows}</div>
+    </div>`;
+  }
+
+  if (pots && pots.length > 1) {
+    potSections.innerHTML = pots.map((pot, i) =>
+      potSectionHTML(pot, i, i === 0 ? 'メインポット' : `サイドポット${i}`)
+    ).join('');
   } else {
     const totalPot = pots ? (pots[0]?.amount || 0) : (gs?.pot || 0);
     const eligible = pots
@@ -1826,19 +1890,7 @@ function renderWinnerCheckboxes() {
           const p = players[uid];
           return p && p.status !== 'folded' && p.status !== 'sittingOut';
         });
-    const rows = eligible.map(uid => {
-      const p = players[uid];
-      return `<label class="winner-check-row">
-        <input type="checkbox" class="winner-cb" data-pot="0" value="${esc(uid)}">
-        <div class="avatar" style="background:${colorFor(p?.name||'')};">${initials(p?.name||'?')}</div>
-        <span class="winner-check-name">${esc(p?.name || uid)}</span>
-        <span class="winner-check-stack">${(p?.stack || 0).toLocaleString()} chips</span>
-      </label>`;
-    }).join('');
-    potSections.innerHTML = `<div class="pot-section">
-      <div class="pot-section-title">ポット: ${totalPot.toLocaleString()} chips</div>
-      <div class="winner-check-list">${rows}</div>
-    </div>`;
+    potSections.innerHTML = potSectionHTML({ amount: totalPot, eligiblePlayerIds: eligible }, 0, 'ポット');
   }
   renderIcons();
 }
@@ -1852,37 +1904,49 @@ async function confirmWinners() {
   const roomRef = db.collection(ROOMS_COLLECTION).doc(roomId);
   const toastParts = [];
 
+  function awardPot(pot, winners) {
+    const share = Math.floor(pot.amount / winners.length);
+    const rem   = pot.amount - share * winners.length;
+    winners.forEach((uid, j) => {
+      batch.update(roomRef.collection('players').doc(uid), {
+        stack: firebase.firestore.FieldValue.increment(share + (j === 0 ? rem : 0)),
+      });
+    });
+    const names = winners.map(uid => players[uid]?.name || uid).join('・');
+    toastParts.push(`${names}が${pot.amount.toLocaleString()}chips獲得`);
+  }
+
   if (pots && pots.length > 1) {
+    // Validation: pot total should equal total handContributions
+    const totalPots   = pots.reduce((s, p) => s + p.amount, 0);
+    const totalContrib = (gs.turnOrder || []).reduce((s, uid) => s + (players[uid]?.handContribution || 0), 0);
+    if (totalContrib > 0 && totalPots !== totalContrib) {
+      console.warn(`[confirmWinners] pot mismatch: pots=${totalPots} contribs=${totalContrib}`);
+    }
     for (let i = 0; i < pots.length; i++) {
       const pot = pots[i];
+      const eligible = pot.eligiblePlayerIds || [];
+      if (eligible.length === 0) continue;
+      if (eligible.length === 1) {
+        awardPot(pot, eligible); continue;
+      }
       const checked = [...document.querySelectorAll(`.winner-cb[data-pot="${i}"]:checked`)].map(el => el.value);
       if (checked.length === 0) {
         const label = i === 0 ? 'メインポット' : `サイドポット${i}`;
         showToast(`${label}の勝者を選択してください`); return;
       }
-      const share = Math.floor(pot.amount / checked.length);
-      const rem   = pot.amount - share * checked.length;
-      checked.forEach((uid, j) => {
-        batch.update(roomRef.collection('players').doc(uid), {
-          stack: firebase.firestore.FieldValue.increment(share + (j === 0 ? rem : 0)),
-        });
-      });
-      const names = checked.map(uid => players[uid]?.name || uid).join('・');
-      toastParts.push(`${names}が${pot.amount.toLocaleString()}chips獲得`);
+      awardPot(pot, checked);
     }
   } else {
-    const checked = [...document.querySelectorAll('.winner-cb[data-pot="0"]:checked')].map(el => el.value);
-    if (checked.length === 0) { showToast('勝者を選択してください'); return; }
-    const potAmt = (pots?.[0]?.amount) ?? (gs.pot || 0);
-    const share  = Math.floor(potAmt / checked.length);
-    const rem    = potAmt - share * checked.length;
-    checked.forEach((uid, i) => {
-      batch.update(roomRef.collection('players').doc(uid), {
-        stack: firebase.firestore.FieldValue.increment(share + (i === 0 ? rem : 0)),
-      });
-    });
-    const names = checked.map(uid => players[uid]?.name || uid).join('・');
-    toastParts.push(`${names}が${potAmt.toLocaleString()}chips獲得`);
+    const eligible = pots ? (pots[0]?.eligiblePlayerIds || []) : null;
+    const potAmt   = (pots?.[0]?.amount) ?? (gs.pot || 0);
+    if (eligible && eligible.length === 1) {
+      awardPot({ amount: potAmt }, eligible);
+    } else {
+      const checked = [...document.querySelectorAll('.winner-cb[data-pot="0"]:checked')].map(el => el.value);
+      if (checked.length === 0) { showToast('勝者を選択してください'); return; }
+      awardPot({ amount: potAmt }, checked);
+    }
   }
 
   batch.update(roomRef, {
@@ -2203,7 +2267,24 @@ async function shareRoom() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeBetModal(); closeCorrectionPanel(); closeGameHistory(); closeExitModal(); }
+  if (e.key === 'Escape') { closeBetModal(); closeCorrectionPanel(); closeGameHistory(); closeExitModal(); closeHeaderMenu(); }
+});
+
+// ---- ヘッダーメニュー ----
+function toggleHeaderMenu() {
+  const m = document.getElementById('header-menu');
+  const wasHidden = m.classList.contains('hidden');
+  m.classList.toggle('hidden');
+  if (wasHidden) renderIcons();
+}
+function closeHeaderMenu() {
+  document.getElementById('header-menu')?.classList.add('hidden');
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('header-menu');
+  if (!menu || menu.classList.contains('hidden')) return;
+  const btn = document.querySelector('.header-menu-btn');
+  if (!menu.contains(e.target) && !btn?.contains(e.target)) closeHeaderMenu();
 });
 
 // ---- 退出ボタン ----
