@@ -488,7 +488,7 @@
 
     if (window.APP_VERSION) {
       const el = document.getElementById('app-version-footer');
-      if (el) el.textContent = `rev. ${APP_VERSION.hash} · ${APP_VERSION.date}`;
+      if (el) el.textContent = `v${APP_VERSION.version} · ${APP_VERSION.date}`;
     }
   });
 </script>
