@@ -1984,6 +1984,16 @@ async function confirmBet() {
   }
 
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}が${isFirstBet ? 'ベット' : 'レイズ'} ${totalBet.toLocaleString()}`);
+  console.log(`[confirmBet] 計算内訳:`, {
+    入力値_totalBet: totalBet,
+    現在の自分のcurrentBet_myBet: myBet,
+    現在のテーブルBet_cur: cur,
+    追加分_betIncrement: betIncrement,
+    現在のスタック_myStack: myStack,
+    'currentBet → (セット)': totalBet,
+    'stack → (差引き)': myStack - betIncrement,
+    'handContribution += ': betIncrement,
+  });
   closeBetModal();
   isActing = true;
   try {
@@ -1993,7 +2003,9 @@ async function confirmBet() {
     batch.update(roomRef, { lastAction: snapshot });
     const newStack = myStack - betIncrement;
     const newStatus = newStack <= 0 ? 'allin' : 'active';
+    // currentBet は totalBet に「セット」（加算ではない）
     const pUpd = { stack: newStack, currentBet: totalBet, status: newStatus, hasActedThisRound: true };
+    console.log('[confirmBet] Firestoreに書き込む値:', pUpd, '+ handContribution increment:', betIncrement);
     batch.update(roomRef.collection('players').doc(myUid), {
       ...pUpd,
       handContribution: firebase.firestore.FieldValue.increment(betIncrement),
