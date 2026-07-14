@@ -1874,34 +1874,66 @@ async function confirmBet() {
 }
 
 // ---- サイドポット計算 ----
+// 境界はオールインプレイヤーの投入額のみで生成する。
+// フォールドしたプレイヤーの投入額が他より少なくても、それ自体は境界を作らない。
+// 各層の金額は「layerSize × 人数」ではなくプレイヤーごとに min(contrib, level) - prev でキャップして合算。
 function calculatePots(playersList) {
   const contribs = playersList
     .filter(p => (p.handContribution || 0) > 0)
     .map(p => ({ uid: p.uid, contrib: p.handContribution || 0, status: p.status || 'active' }));
   if (contribs.length === 0) return [{ amount: 0, eligiblePlayerIds: [] }];
-  const levels = [...new Set(contribs.map(c => c.contrib))].sort((a, b) => a - b);
-  const pots = [];
-  let prev = 0;
-  for (const level of levels) {
-    const layerSize = level - prev;
-    const contributors = contribs.filter(c => c.contrib >= level);
-    const amount = layerSize * contributors.length;
-    const eligible = contributors
+
+  const total = contribs.reduce((s, c) => s + c.contrib, 0);
+
+  // オールインプレイヤーの投入額だけを境界として使う
+  const allinLevels = [...new Set(
+    contribs.filter(c => c.status === 'allin').map(c => c.contrib)
+  )].sort((a, b) => a - b);
+
+  if (allinLevels.length === 0) {
+    // オールインなし → ポットは1つ。フォールドした人が何人いても分割しない
+    const eligible = contribs
       .filter(c => c.status !== 'folded' && c.status !== 'sittingOut')
       .map(c => c.uid);
+    console.log(`[pots] no allin → single pot ${total.toLocaleString()} eligible:[${eligible.map(u=>u.slice(-4)).join(',')}]`);
+    return [{ amount: total, eligiblePlayerIds: eligible }];
+  }
+
+  // オールインあり → 各オールイン水準で層を生成
+  const pots = [];
+  let prev = 0;
+  for (const level of allinLevels) {
+    // 各プレイヤーのこの層への実際の寄与 = max(0, min(contrib, level) - prev)
+    let amount = 0;
+    const eligible = [];
+    for (const c of contribs) {
+      amount += Math.max(0, Math.min(c.contrib, level) - prev);
+      // この層への寄与があり（contrib > prev）かつ非フォールドなら対象
+      if (c.contrib > prev && c.status !== 'folded' && c.status !== 'sittingOut') {
+        eligible.push(c.uid);
+      }
+    }
     if (amount > 0) pots.push({ amount, eligiblePlayerIds: eligible });
     prev = level;
   }
-  const result = pots.length > 0 ? pots : [{ amount: 0, eligiblePlayerIds: [] }];
+
+  // 最高オールイン水準を超える余剰チップ（非オールインプレイヤーのみ）
+  const potsTotal = pots.reduce((s, p) => s + p.amount, 0);
+  const remaining = total - potsTotal;
+  if (remaining > 0) {
+    const eligible = contribs
+      .filter(c => c.contrib > prev && c.status !== 'folded' && c.status !== 'sittingOut')
+      .map(c => c.uid);
+    pots.push({ amount: remaining, eligiblePlayerIds: eligible });
+  }
 
   // Debug & validation
-  const totalContrib = contribs.reduce((s, c) => s + c.contrib, 0);
-  const totalPots    = result.reduce((s, p) => s + p.amount, 0);
+  const newTotal = pots.reduce((s, p) => s + p.amount, 0);
   console.log('[pots] input:', contribs.map(c => `${c.uid.slice(-4)}:${c.contrib}(${c.status})`).join(' | '));
-  console.log('[pots] result:', result.map((p, i) => `${i===0?'main':'side'+i}=${p.amount}[${p.eligiblePlayerIds.map(u=>u.slice(-4)).join(',')}]`).join(' | '));
-  console.assert(totalContrib === totalPots, `[pots] MISMATCH contribs=${totalContrib} pots=${totalPots}`);
+  console.log('[pots] result:', pots.map((p, i) => `${i===0?'main':'side'+i}=${p.amount}[${p.eligiblePlayerIds.map(u=>u.slice(-4)).join(',')}]`).join(' | '));
+  console.assert(total === newTotal, `[pots] MISMATCH contribs=${total} pots=${newTotal}`);
 
-  return result;
+  return pots.length > 0 ? pots : [{ amount: total, eligiblePlayerIds: [] }];
 }
 
 // ---- ショーダウンタブ管理 ----
