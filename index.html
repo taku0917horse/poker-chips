@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="version.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -312,6 +313,7 @@
 </div>
 
 <div id="toast" class="toast"></div>
+<div id="app-version-footer" style="text-align:center;font-size:10px;color:#94a3b8;padding:10px 0 16px;letter-spacing:.03em"></div>
 
 <script>
   // ---- 履歴 ----
@@ -463,6 +465,12 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && document.activeElement.id !== 'join-input') return;
   });
+
+  // バージョン表示
+  if (window.APP_VERSION) {
+    const el = document.getElementById('app-version-footer');
+    if (el) el.textContent = `rev. ${APP_VERSION.hash} · ${APP_VERSION.date}`;
+  }
 </script>
 </body>
 </html>
