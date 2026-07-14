@@ -477,6 +477,13 @@ header {
   display: flex; justify-content: space-between;
   font-size: 13px; color: var(--subtext); margin-bottom: 8px;
 }
+.bm-total-hint {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #f0fdf4; border-radius: 10px; padding: 8px 12px; margin-top: 8px;
+  font-size: 13px;
+}
+.bm-total-hint-label { color: var(--subtext); }
+.bm-total-hint-val { font-weight: 700; color: var(--primary); font-size: 15px; }
 
 /* toast */
 .toast {
@@ -945,12 +952,17 @@ header {
       <span>自分のスタック</span><strong id="bm-stack">0</strong>
     </div>
     <div class="modal-info-row" id="bm-minraise-row">
-      <span>最低レイズ額</span><strong id="bm-minraise">0</strong>
+      <span>最低合計投入額</span><strong id="bm-minraise">0</strong>
     </div>
     <div style="margin-top:6px">
-      <label class="modal-label">合計ベット額（このストリートの投入合計）</label>
+      <label class="modal-label">合計投入額（このストリートのトータル）</label>
       <input id="bet-amount-input" type="number" min="1"
+        oninput="updateBetIncrementDisplay()"
         onkeydown="if(event.key==='Enter') confirmBet()">
+    </div>
+    <div class="bm-total-hint">
+      <span class="bm-total-hint-label">上乗せ額（コールとの差）</span>
+      <span class="bm-total-hint-val" id="bm-increment-val">-</span>
     </div>
     <div class="quick-grid" id="bet-quick-grid">
       <button class="quick-btn" id="bq-half">½ポット</button>
@@ -1716,10 +1728,11 @@ function buildTransition(batch, roomRef, gs, updPlayers, potDelta) {
         const idx = (dealerIdx + 1 + i) % n;
         if (updPlayers[order[idx]]?.status === 'active') { firstActive = idx; break; }
       }
-      const bb = roomData?.settings?.bigBlind || 0;
+      // フロップ以降の最低ベット額: BB（ブラインド方式）またはアンティ額（アンティ方式）
+      const minBet = roomData?.settings?.bigBlind || roomData?.settings?.anteAmount || 1;
       batch.update(roomRef, {
         'gameState.street': streets[nextIdx],
-        'gameState.currentBetAmount': 0, 'gameState.minRaise': bb,
+        'gameState.currentBetAmount': 0, 'gameState.minRaise': minBet,
         'gameState.currentTurnIndex': firstActive >= 0 ? firstActive : 0,
         'gameState.actionCloserId': null,
       });
@@ -1892,9 +1905,13 @@ function getBetParams() {
   const cur        = gs.currentBetAmount || 0;
   const myStack    = me.stack || 0;
   const isFirstBet = cur === 0;
-  const minTotal   = isFirstBet ? 1 : cur + (gs.minRaise || cur);
+  // minRaiseSize: 直前のレイズ幅（これ以上の上乗せが必要）
+  // gs.minRaise が 0 の場合は cur をフォールバックとして使う（2倍制約）
+  const minRaiseSize = gs.minRaise > 0 ? gs.minRaise : (cur > 0 ? cur : 1);
+  // minTotal: このストリートで投入できる最低合計額
+  const minTotal   = isFirstBet ? (gs.minRaise || 1) : cur + minRaiseSize;
   const maxTotal   = myBet + myStack;
-  return { pot, myBet, cur, myStack, isFirstBet, minTotal, maxTotal };
+  return { pot, myBet, cur, myStack, isFirstBet, minTotal, maxTotal, minRaiseSize };
 }
 
 function updateBetModalDisplay() {
@@ -1902,34 +1919,39 @@ function updateBetModalDisplay() {
   if (!p) return;
   document.getElementById('bm-pot').textContent   = p.pot.toLocaleString();
   document.getElementById('bm-stack').textContent = p.myStack.toLocaleString();
-  const mrRow = document.getElementById('bm-minraise-row');
-  if (!p.isFirstBet) {
-    mrRow.style.display = '';
-    document.getElementById('bm-minraise').textContent = p.minTotal.toLocaleString();
-  } else {
-    mrRow.style.display = 'none';
-  }
+  document.getElementById('bm-minraise').textContent = p.minTotal.toLocaleString();
   document.getElementById('bet-amount-input').min = p.minTotal;
-  // クイックボタン金額を最新値で再計算（chipUnit単位に丸める）
+  updateBetIncrementDisplay();
+  // クイックボタン金額を最新値で再計算（chipUnit単位に丸め、minTotal以上を保証）
   const unit = getChipUnit();
   const half = Math.max(p.minTotal, roundToUnit(p.myBet + Math.ceil(p.pot / 2), unit));
   const full = Math.max(p.minTotal, roundToUnit(p.myBet + p.pot, unit));
-  const twox = p.cur > 0 ? roundToUnit(p.cur * 2, unit) : roundToUnit(p.minTotal * 2, unit);
-  console.log(`[bet] 2x: cur=${p.cur}, twox=${twox}, unit=${unit}`);
+  const twox = Math.max(p.minTotal, roundToUnit(p.cur > 0 ? p.cur * 2 : p.minTotal * 2, unit));
+  console.log(`[bet] 2x: cur=${p.cur}, minTotal=${p.minTotal}, twox=${twox}, unit=${unit}`);
   document.getElementById('bq-half').textContent  = `½ポット (${half.toLocaleString()})`;
   document.getElementById('bq-pot').textContent   = `ポット (${full.toLocaleString()})`;
   document.getElementById('bq-2x').textContent    = `2倍 (${twox.toLocaleString()})`;
   document.getElementById('bq-allin').textContent = `オールイン (${p.maxTotal.toLocaleString()})`;
-  document.getElementById('bq-half').onclick  = () => { document.getElementById('bet-amount-input').value = half; };
-  document.getElementById('bq-pot').onclick   = () => { document.getElementById('bet-amount-input').value = full; };
-  document.getElementById('bq-2x').onclick    = () => { document.getElementById('bet-amount-input').value = twox; };
-  document.getElementById('bq-allin').onclick = () => { document.getElementById('bet-amount-input').value = p.maxTotal; };
+  document.getElementById('bq-half').onclick  = () => { document.getElementById('bet-amount-input').value = half;     updateBetIncrementDisplay(); };
+  document.getElementById('bq-pot').onclick   = () => { document.getElementById('bet-amount-input').value = full;     updateBetIncrementDisplay(); };
+  document.getElementById('bq-2x').onclick    = () => { document.getElementById('bet-amount-input').value = twox;     updateBetIncrementDisplay(); };
+  document.getElementById('bq-allin').onclick = () => { document.getElementById('bet-amount-input').value = p.maxTotal; updateBetIncrementDisplay(); };
+}
+
+function updateBetIncrementDisplay() {
+  const p = getBetParams();
+  const el = document.getElementById('bm-increment-val');
+  if (!p || !el) return;
+  const totalBet = parseInt(document.getElementById('bet-amount-input').value) || 0;
+  const increment = totalBet - p.myBet;
+  el.textContent = increment > 0 ? `+${increment.toLocaleString()} chips` : '-';
 }
 
 function openBetModal() {
   const p = getBetParams();
   if (!p) return;
-  document.getElementById('bet-modal-title').textContent = p.isFirstBet ? 'ベット' : 'レイズ';
+  const label = p.isFirstBet ? 'ベット' : 'レイズ';
+  document.getElementById('bet-modal-title').textContent = label;
   document.getElementById('bet-amount-input').value = p.minTotal;
   updateBetModalDisplay();
   document.getElementById('bet-modal').classList.remove('hidden');
@@ -1950,14 +1972,15 @@ async function confirmBet() {
   const myBet  = me.currentBet || 0;
   const cur    = gs.currentBetAmount || 0;
   const myStack = me.stack || 0;
-  const minRaise = gs.minRaise || cur;
   const isFirstBet = cur === 0;
+  const minRaiseSize = gs.minRaise > 0 ? gs.minRaise : (cur > 0 ? cur : 1);
+  const minTotal = isFirstBet ? (gs.minRaise || 1) : cur + minRaiseSize;
   const betIncrement = totalBet - myBet;
 
   if (betIncrement <= 0) { showToast('有効なベット額を入力してください'); return; }
   if (betIncrement > myStack) { showToast('スタックが足りません'); return; }
-  if (!isFirstBet && totalBet < cur + minRaise) {
-    showToast(`最低レイズ額は合計 ${(cur + minRaise).toLocaleString()} chips です`); return;
+  if (totalBet < minTotal) {
+    showToast(`最低${isFirstBet ? 'ベット' : 'レイズ'}の合計は ${minTotal.toLocaleString()} chips です`); return;
   }
 
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}が${isFirstBet ? 'ベット' : 'レイズ'} ${totalBet.toLocaleString()}`);
