@@ -782,7 +782,7 @@ header {
       </div>
       <div class="gs-divider"></div>
       <div class="gs-item">
-        <div class="gs-label">自分のBET</div>
+        <div class="gs-label">投入合計</div>
         <div class="gs-value mybet" id="gs-mybet">-</div>
       </div>
     </div>
@@ -880,10 +880,6 @@ header {
 
     <!-- アクションパネル（自分の手番） -->
     <div id="action-panel" class="action-panel hidden">
-      <div class="action-info">
-        <span class="action-info-stack">スタック: <strong id="my-stack-display">0</strong> chips</span>
-        <span class="action-info-call" id="to-call-display"></span>
-      </div>
       <div class="action-btns">
         <button id="btn-check" class="action-btn btn-check" onclick="actionCheck()">
           <i data-lucide="check" width="15" height="15"></i>チェック
@@ -1360,8 +1356,9 @@ function renderPlayingPhase() {
                         : p.status === 'folded'     ? '<span class="badge folded-badge">FOLD</span>'
                         : p.status === 'sittingOut' ? '<span class="badge sittingout-badge">退出</span>' : '';
       const myBetStyle = isMe && (p.currentBet || 0) > 0 ? ' style="font-weight:700;color:var(--primary);font-size:13px"' : '';
-      const betInfo = handActive
-        ? `<div class="bet-val"${myBetStyle}>ベット: ${(p.currentBet || 0).toLocaleString()}</div>` : '';
+      const isBetVisible = handActive && p.status !== 'folded' && p.status !== 'sittingOut';
+      const betInfo = isBetVisible
+        ? `<div class="bet-val"${myBetStyle}>ST: ${(p.currentBet || 0).toLocaleString()}</div>` : '';
 
       let positionBadges = '';
       if (handActive && dealerIdx != null && tn > 0) {
@@ -1503,9 +1500,6 @@ function renderActionPanel(gs, me) {
   const callAmount  = Math.max(0, curBet - myBet);
   const canCheck    = myBet >= curBet;
   const isFirstBet  = curBet === 0;
-
-  document.getElementById('my-stack-display').textContent = myStack.toLocaleString();
-  document.getElementById('to-call-display').textContent  = callAmount > 0 ? `コール: ${callAmount.toLocaleString()}` : '';
 
   // チェック／フォールドの表示切替
   document.getElementById('btn-check').classList.toggle('hidden', !canCheck);
