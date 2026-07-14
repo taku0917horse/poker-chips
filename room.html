@@ -661,6 +661,55 @@ header {
 }
 .seat-order-btn:not(:disabled):active { background: #e2e8f0; }
 .seat-order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ---- Action FX ---- */
+@keyframes fx-shake {
+  0%,100% { transform: translateX(0); }
+  15%     { transform: translateX(-5px); }
+  30%     { transform: translateX(5px); }
+  50%     { transform: translateX(-4px); }
+  70%     { transform: translateX(4px); }
+  85%     { transform: translateX(-2px); }
+}
+.fx-shake { animation: fx-shake 0.38s ease; }
+
+@keyframes fx-chip-fly {
+  0%   { transform: translate(0,0) scale(1); opacity: 1; }
+  75%  { opacity: 0.9; }
+  100% { transform: translate(var(--tx,0px),var(--ty,-80px)) scale(0.35); opacity: 0; }
+}
+@keyframes fx-chip-rise {
+  0%   { transform: translateY(18px) scale(0.25); opacity: 0; }
+  55%  { transform: translateY(-8px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(var(--ty,-50px)) scale(0.8); opacity: 0; }
+}
+@keyframes fx-card-out {
+  0%   { transform: translate(0,0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(160px,-15px) rotate(22deg); opacity: 0; }
+}
+@keyframes fx-allin-burst {
+  0%   { transform: translate(0,0) scale(1.4); opacity: 1; }
+  100% { transform: translate(var(--tx,0px),var(--ty,0px)) scale(0.1); opacity: 0; }
+}
+
+.fx-chip {
+  position: fixed; width: 26px; height: 26px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.65); pointer-events: none; z-index: 9001;
+}
+.fx-chip-call  { background: #1e40af; animation: fx-chip-fly  0.55s cubic-bezier(.4,0,.2,1) forwards; }
+.fx-chip-bet   { background: #7c3aed; animation: fx-chip-rise 0.65s ease-out              forwards; }
+.fx-chip-allin { background: #dc2626; animation: fx-allin-burst 0.65s cubic-bezier(.4,0,.2,1) forwards; }
+.fx-card {
+  position: fixed; width: 20px; height: 28px; border-radius: 4px;
+  background: white; border: 2px solid #94a3b8; pointer-events: none; z-index: 9001;
+  animation: fx-card-out 0.45s ease-in forwards;
+}
+.sfx-btn {
+  background: rgba(255,255,255,0.22); border: none; color: white;
+  border-radius: 9px; padding: 5px 9px; cursor: pointer;
+  display: flex; align-items: center; transition: background 0.15s;
+}
+.sfx-btn:active { background: rgba(255,255,255,0.38); }
 </style>
 </head>
 <body>
@@ -722,6 +771,9 @@ header {
     </div>
     <div class="header-right">
       <div id="rt-dot" class="rt-dot connecting"></div>
+      <button id="sfx-btn" class="sfx-btn" onclick="toggleSfx()" title="音OFF">
+        <i data-lucide="volume-2" width="18" height="18"></i>
+      </button>
       <button class="header-menu-btn" onclick="toggleHeaderMenu()">⋮</button>
     </div>
   </header>
@@ -1106,6 +1158,7 @@ function setRtStatus(s) {
 
 // ---- 起動 ----
 window.addEventListener('DOMContentLoaded', () => {
+  _updateSfxBtn();
   roomId = new URLSearchParams(location.search).get('room');
   if (!roomId) { location.href = 'index.html'; return; }
   if (typeof firebase === 'undefined') {
@@ -1769,6 +1822,176 @@ function buildLastActionSnapshot(gs, description) {
   return snap;
 }
 
+// ================================================================
+// SOUND & ANIMATION FX
+// ================================================================
+
+let _audioCtx = null;
+let _sfxMuted = localStorage.getItem('sfxMuted') === 'true';
+
+function _getAudioCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+function _tone({ freq = 440, type = 'sine', gain = 0.3, dur = 0.25, attack = 0.01, delay = 0 } = {}) {
+  if (_sfxMuted) return;
+  try {
+    const ctx = _getAudioCtx();
+    const t   = ctx.currentTime + delay;
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  } catch(e) {}
+}
+
+function _noise({ gain = 0.25, dur = 0.15, delay = 0, centerFreq = 800 } = {}) {
+  if (_sfxMuted) return;
+  try {
+    const ctx    = _getAudioCtx();
+    const t      = ctx.currentTime + delay;
+    const len    = Math.ceil(ctx.sampleRate * dur);
+    const buf    = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data   = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src    = ctx.createBufferSource();
+    src.buffer   = buf;
+    const filt   = ctx.createBiquadFilter();
+    filt.type    = 'bandpass';
+    filt.frequency.value = centerFreq;
+    filt.Q.value = 0.8;
+    const g = ctx.createGain();
+    src.connect(filt); filt.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(gain, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.start(t); src.stop(t + dur + 0.05);
+  } catch(e) {}
+}
+
+// 各アクションの効果音
+function _sfxCheck()  {
+  _noise({ gain: 0.45, dur: 0.07, centerFreq: 280 });
+  _noise({ gain: 0.45, dur: 0.07, delay: 0.13, centerFreq: 280 });
+}
+function _sfxCall()   {
+  _tone({ freq: 880,  type: 'triangle', gain: 0.38, dur: 0.32, attack: 0.005 });
+  _tone({ freq: 1200, type: 'sine',     gain: 0.18, dur: 0.22, attack: 0.005, delay: 0.025 });
+}
+function _sfxBet()    {
+  _tone({ freq: 420, type: 'triangle', gain: 0.38, dur: 0.22, attack: 0.01 });
+  _tone({ freq: 680, type: 'sine',     gain: 0.25, dur: 0.28, attack: 0.005, delay: 0.06 });
+  _noise({ gain: 0.18, dur: 0.1, centerFreq: 750 });
+}
+function _sfxRaise()  {
+  _tone({ freq: 360, type: 'triangle', gain: 0.42, dur: 0.25, attack: 0.01 });
+  _tone({ freq: 620, type: 'sine',     gain: 0.28, dur: 0.32, attack: 0.005, delay: 0.05 });
+  _tone({ freq: 900, type: 'sine',     gain: 0.18, dur: 0.22, attack: 0.005, delay: 0.12 });
+  _noise({ gain: 0.2, dur: 0.1, centerFreq: 900 });
+}
+function _sfxFold()   {
+  _noise({ gain: 0.32, dur: 0.14, centerFreq: 2200 });
+  _tone({ freq: 220, type: 'sawtooth', gain: 0.12, dur: 0.1, attack: 0.005 });
+}
+function _sfxAllIn()  {
+  _tone({ freq: 200, type: 'triangle', gain: 0.5, dur: 0.4, attack: 0.02 });
+  _noise({ gain: 0.35, dur: 0.18, centerFreq: 550 });
+  for (let i = 0; i < 4; i++)
+    _tone({ freq: 700 + i * 150, type: 'sine', gain: 0.22, dur: 0.35, attack: 0.01, delay: 0.08 + i * 0.06 });
+}
+
+// アニメーション要素を生成・配置してから自動削除
+function _spawnEl(cls, left, top, props = {}, removeAfter = 800) {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.style.left = `${left}px`;
+  el.style.top  = `${top}px`;
+  Object.entries(props).forEach(([k, v]) => el.style.setProperty(k, v));
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), removeAfter);
+}
+
+function _fxCheck() {
+  const el = document.getElementById('app-shell');
+  if (!el) return;
+  el.classList.remove('fx-shake');
+  void el.offsetWidth; // reflow to restart animation
+  el.classList.add('fx-shake');
+  setTimeout(() => el.classList.remove('fx-shake'), 450);
+}
+
+function _fxCall() {
+  const cx = window.innerWidth / 2;
+  const sy = window.innerHeight - 130;
+  const ey = 200;
+  _spawnEl('fx-chip fx-chip-call', cx - 13, sy, { '--tx': '0px', '--ty': `${ey - sy}px` }, 700);
+}
+
+function _fxBet(isRaise) {
+  const cx = window.innerWidth / 2;
+  const sy = window.innerHeight - 140;
+  const count = isRaise ? 3 : 2;
+  for (let i = 0; i < count; i++) {
+    const ox = (i - (count - 1) / 2) * 10;
+    setTimeout(() => _spawnEl('fx-chip fx-chip-bet', cx - 13 + ox, sy, { '--ty': `${-55 - i * 14}px` }, 750), i * 55);
+  }
+}
+
+function _fxFold() {
+  const cx = window.innerWidth / 2;
+  const sy = window.innerHeight - 160;
+  _spawnEl('fx-card', cx - 24, sy, {}, 550);
+  setTimeout(() => _spawnEl('fx-card', cx - 12, sy - 4, {}, 550), 60);
+}
+
+function _fxAllIn() {
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight / 2;
+  const count = 8;
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const dist  = 100 + Math.random() * 80;
+    setTimeout(() => _spawnEl(
+      'fx-chip fx-chip-allin', cx - 13, cy - 13,
+      { '--tx': `${Math.cos(angle) * dist}px`, '--ty': `${Math.sin(angle) * dist}px` },
+      800
+    ), i * 28);
+  }
+}
+
+function playFX(type) {
+  switch (type) {
+    case 'check': _sfxCheck(); _fxCheck(); break;
+    case 'call':  _sfxCall();  _fxCall();  break;
+    case 'bet':   _sfxBet();   _fxBet(false); break;
+    case 'raise': _sfxRaise(); _fxBet(true);  break;
+    case 'fold':  _sfxFold();  _fxFold();  break;
+    case 'allin': _sfxAllIn(); _fxAllIn(); break;
+  }
+}
+
+function toggleSfx() {
+  _sfxMuted = !_sfxMuted;
+  localStorage.setItem('sfxMuted', _sfxMuted);
+  _updateSfxBtn();
+}
+function _updateSfxBtn() {
+  const btn = document.getElementById('sfx-btn');
+  if (!btn) return;
+  btn.innerHTML = _sfxMuted
+    ? '<i data-lucide="volume-x" width="18" height="18"></i>'
+    : '<i data-lucide="volume-2" width="18" height="18"></i>';
+  btn.title = _sfxMuted ? '音ON' : '音OFF';
+  if (window.lucide) lucide.createIcons({ nodes: [btn] });
+}
+
+// ================================================================
 // ---- チェック ----
 async function actionCheck() {
   if (isActing) return;
@@ -1776,6 +1999,7 @@ async function actionCheck() {
   const me = players[myUid];
   if (!gs || !me) return;
   if ((me.currentBet || 0) < (gs.currentBetAmount || 0)) { showToast('チェックできません'); return; }
+  playFX('check');
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}がチェック`);
   isActing = true;
   try {
@@ -1798,6 +2022,7 @@ async function actionFold() {
   const me = players[myUid];
   if (!gs || !me) return;
   if (!confirm('フォールドしますか？')) return;
+  playFX('fold');
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}がフォールド`);
   isActing = true;
   try {
@@ -1821,6 +2046,7 @@ async function actionCall() {
   if (!gs || !me) return;
   const callAmt = Math.min(Math.max(0, (gs.currentBetAmount || 0) - (me.currentBet || 0)), me.stack || 0);
   if (callAmt <= 0) { actionCheck(); return; }
+  playFX('call');
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}がコール ${callAmt.toLocaleString()}`);
   isActing = true;
   try {
@@ -1850,6 +2076,7 @@ async function actionAllIn() {
   const me = players[myUid];
   if (!gs || !me || (me.stack || 0) <= 0) return;
   if (!confirm(`オールイン ${(me.stack || 0).toLocaleString()} chips でよいですか？`)) return;
+  playFX('allin');
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}がオールイン ${(me.stack || 0).toLocaleString()}`);
   isActing = true;
   try {
@@ -1982,6 +2209,7 @@ async function confirmBet() {
     showToast(`最低${isFirstBet ? 'ベット' : 'レイズ'}の合計は ${minTotal.toLocaleString()} chips です`); return;
   }
 
+  playFX(isFirstBet ? 'bet' : 'raise');
   const snapshot = buildLastActionSnapshot(gs, `${me.name || 'プレイヤー'}が${isFirstBet ? 'ベット' : 'レイズ'} ${totalBet.toLocaleString()}`);
   console.log(`[confirmBet] 計算内訳:`, {
     入力値_totalBet: totalBet,
