@@ -110,6 +110,61 @@ header {
 }
 .street-detail span { color: #fbbf24; font-weight: 700; }
 
+/* betting rules */
+.rule-box {
+  background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px;
+  padding: 14px; margin-bottom: 12px;
+}
+.rule-box-title {
+  font-size: 12px; font-weight: 700; color: var(--primary);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+}
+.rule-box p { font-size: 13px; color: var(--text); line-height: 1.7; }
+.rule-box p + p { margin-top: 4px; }
+
+.example-flow {
+  background: #1e293b; border-radius: 12px; padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+}
+.ex-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  font-size: 13px; color: white; line-height: 1.5;
+}
+.ex-player {
+  flex-shrink: 0; font-weight: 700; font-size: 11px;
+  padding: 2px 8px; border-radius: 6px; margin-top: 2px;
+}
+.ep-a { background: #0ea5e9; }
+.ep-b { background: #7c3aed; }
+.ep-c { background: #dc2626; }
+.ex-note { color: rgba(255,255,255,0.55); font-size: 12px; }
+
+.raise-rule-list { display: flex; flex-direction: column; gap: 8px; }
+.raise-rule-item {
+  font-size: 13px; color: var(--text); line-height: 1.7;
+  padding: 10px 12px; background: #f8faff; border-radius: 10px;
+  border-left: 3px solid #7c3aed;
+}
+.raise-rule-item strong { color: #7c3aed; }
+
+.display-diff-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.display-diff-table th {
+  font-size: 11px; font-weight: 700; color: var(--subtext);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  padding: 6px 10px; border-bottom: 2px solid var(--border); text-align: left;
+}
+.display-diff-table td {
+  padding: 10px 10px; border-bottom: 1px solid var(--border);
+  font-size: 13px; vertical-align: top; line-height: 1.6;
+}
+.display-diff-table tr:last-child td { border-bottom: none; }
+.label-chip {
+  display: inline-block; font-size: 11px; font-weight: 700;
+  padding: 2px 8px; border-radius: 6px; margin-bottom: 4px; white-space: nowrap;
+}
+.lc-total { background: #dcfce7; color: #15803d; }
+.lc-street { background: #ede9fe; color: #6d28d9; }
+
 /* hand rankings */
 .hand-table { width: 100%; border-collapse: collapse; }
 .hand-table th {
@@ -179,6 +234,76 @@ header {
         <div class="action-desc">所持チップを全て賭ける。コール額がスタックを上回る場合は自動的にオールイン。</div>
       </div>
     </div>
+  </div>
+
+  <!-- ベット/レイズの宣言ルール -->
+  <div class="section-card">
+    <div class="section-title">
+      <i data-lucide="message-square" width="16" height="16"></i>
+      ベット/レイズの宣言ルール
+    </div>
+
+    <!-- 基本ルール -->
+    <div class="rule-box">
+      <div class="rule-box-title">基本：宣言額 ＝ そのストリートでの最終到達額</div>
+      <p>「ベット 1000」→ 自分がそのストリートで<strong>合計 1000</strong> 投入する</p>
+      <p>「レイズ 5000」→ 自分がそのストリートで<strong>合計 5000</strong> 投入する（コール分も含む）</p>
+      <p style="margin-top:8px;font-size:12px;color:var(--subtext)">上乗せ額を宣言するのではなく、到達額を宣言します。</p>
+    </div>
+
+    <!-- 具体例 -->
+    <div style="font-size:12px;font-weight:700;color:var(--subtext);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">具体例（フロップ）</div>
+    <div class="example-flow">
+      <div class="ex-row">
+        <span class="ex-player ep-a">A</span>
+        <div>ベット 2000 <span class="ex-note">→ フロップ合計 2,000</span></div>
+      </div>
+      <div class="ex-row">
+        <span class="ex-player ep-b">B</span>
+        <div>コール <span class="ex-note">→ フロップ合計 2,000（Aと同額）</span></div>
+      </div>
+      <div class="ex-row">
+        <span class="ex-player ep-c">C</span>
+        <div>「レイズ、5000」と宣言<br>
+          <span class="ex-note">→ フロップ合計 5,000。追加で払うのは 3,000（5,000 − コール分 2,000）</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最低レイズ額 -->
+    <div style="font-size:12px;font-weight:700;color:var(--subtext);margin:12px 0 6px;text-transform:uppercase;letter-spacing:0.5px">最低レイズ額のルール</div>
+    <div class="raise-rule-list">
+      <div class="raise-rule-item">
+        レイズの最低上乗せ幅は <strong>直前のベット/レイズの上乗せ幅と同額以上</strong>。
+      </div>
+      <div class="raise-rule-item">
+        例：BB=100 でAが 300 にレイズ（上乗せ幅 200）した場合、<br>
+        次にレイズするBの最低到達額は <strong>500</strong>（300 + 200）。
+      </div>
+      <div class="raise-rule-item">
+        BがちょうどBが 500 でレイズした場合（上乗せ幅 200）、Cの最低到達額は <strong>700</strong>（500 + 200）。<br>
+        もしBが 700 にレイズしていたら（上乗せ幅 400）、Cの最低到達額は <strong>1100</strong>（700 + 400）。<br>
+        <span style="color:var(--subtext);font-size:12px">→ 直前のレイズ幅によって最低額は変動します。</span>
+      </div>
+    </div>
+
+    <!-- 投入合計 vs ST の違い -->
+    <div style="font-size:12px;font-weight:700;color:var(--subtext);margin:12px 0 6px;text-transform:uppercase;letter-spacing:0.5px">アプリの表示について</div>
+    <table class="display-diff-table">
+      <thead>
+        <tr><th>表示ラベル</th><th>意味</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="label-chip lc-total">投入合計</span></td>
+          <td>プリフロップ〜現在のストリートまで、<strong>ハンド全体</strong>を通した累計投入額</td>
+        </tr>
+        <tr>
+          <td><span class="label-chip lc-street">ST</span></td>
+          <td><strong>現在のストリートのみ</strong>での投入額。ベット/レイズ入力欄の金額はこれを指す</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 
   <!-- ベッティング順 -->
