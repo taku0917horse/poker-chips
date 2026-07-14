@@ -1158,6 +1158,7 @@ function setRtStatus(s) {
 
 // ---- 起動 ----
 window.addEventListener('DOMContentLoaded', () => {
+  _initSounds();
   _updateSfxBtn();
   roomId = new URLSearchParams(location.search).get('room');
   if (!roomId) { location.href = 'index.html'; return; }
@@ -1826,84 +1827,26 @@ function buildLastActionSnapshot(gs, description) {
 // SOUND & ANIMATION FX
 // ================================================================
 
-let _audioCtx = null;
 let _sfxMuted = localStorage.getItem('sfxMuted') === 'true';
+const _SFX_VOLUME = 0.65;
+const _sounds = {};
 
-function _getAudioCtx() {
-  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  if (_audioCtx.state === 'suspended') _audioCtx.resume();
-  return _audioCtx;
+function _initSounds() {
+  const files = { check: 'check', call: 'call', bet: 'bet', fold: 'fold', allin: 'allin' };
+  Object.entries(files).forEach(([key, name]) => {
+    const a = new Audio(`sounds/${name}.mp3`);
+    a.volume  = _SFX_VOLUME;
+    a.preload = 'auto';
+    _sounds[key] = a;
+  });
 }
 
-function _tone({ freq = 440, type = 'sine', gain = 0.3, dur = 0.25, attack = 0.01, delay = 0 } = {}) {
+function _playSound(key) {
   if (_sfxMuted) return;
-  try {
-    const ctx = _getAudioCtx();
-    const t   = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const g   = ctx.createGain();
-    osc.connect(g); g.connect(ctx.destination);
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + attack);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.start(t); osc.stop(t + dur + 0.05);
-  } catch(e) {}
-}
-
-function _noise({ gain = 0.25, dur = 0.15, delay = 0, centerFreq = 800 } = {}) {
-  if (_sfxMuted) return;
-  try {
-    const ctx    = _getAudioCtx();
-    const t      = ctx.currentTime + delay;
-    const len    = Math.ceil(ctx.sampleRate * dur);
-    const buf    = ctx.createBuffer(1, len, ctx.sampleRate);
-    const data   = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-    const src    = ctx.createBufferSource();
-    src.buffer   = buf;
-    const filt   = ctx.createBiquadFilter();
-    filt.type    = 'bandpass';
-    filt.frequency.value = centerFreq;
-    filt.Q.value = 0.8;
-    const g = ctx.createGain();
-    src.connect(filt); filt.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(gain, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    src.start(t); src.stop(t + dur + 0.05);
-  } catch(e) {}
-}
-
-// 各アクションの効果音
-function _sfxCheck()  {
-  _noise({ gain: 0.45, dur: 0.07, centerFreq: 280 });
-  _noise({ gain: 0.45, dur: 0.07, delay: 0.13, centerFreq: 280 });
-}
-function _sfxCall()   {
-  _tone({ freq: 880,  type: 'triangle', gain: 0.38, dur: 0.32, attack: 0.005 });
-  _tone({ freq: 1200, type: 'sine',     gain: 0.18, dur: 0.22, attack: 0.005, delay: 0.025 });
-}
-function _sfxBet()    {
-  _tone({ freq: 420, type: 'triangle', gain: 0.38, dur: 0.22, attack: 0.01 });
-  _tone({ freq: 680, type: 'sine',     gain: 0.25, dur: 0.28, attack: 0.005, delay: 0.06 });
-  _noise({ gain: 0.18, dur: 0.1, centerFreq: 750 });
-}
-function _sfxRaise()  {
-  _tone({ freq: 360, type: 'triangle', gain: 0.42, dur: 0.25, attack: 0.01 });
-  _tone({ freq: 620, type: 'sine',     gain: 0.28, dur: 0.32, attack: 0.005, delay: 0.05 });
-  _tone({ freq: 900, type: 'sine',     gain: 0.18, dur: 0.22, attack: 0.005, delay: 0.12 });
-  _noise({ gain: 0.2, dur: 0.1, centerFreq: 900 });
-}
-function _sfxFold()   {
-  _noise({ gain: 0.32, dur: 0.14, centerFreq: 2200 });
-  _tone({ freq: 220, type: 'sawtooth', gain: 0.12, dur: 0.1, attack: 0.005 });
-}
-function _sfxAllIn()  {
-  _tone({ freq: 200, type: 'triangle', gain: 0.5, dur: 0.4, attack: 0.02 });
-  _noise({ gain: 0.35, dur: 0.18, centerFreq: 550 });
-  for (let i = 0; i < 4; i++)
-    _tone({ freq: 700 + i * 150, type: 'sine', gain: 0.22, dur: 0.35, attack: 0.01, delay: 0.08 + i * 0.06 });
+  const snd = _sounds[key];
+  if (!snd) return;
+  snd.currentTime = 0;
+  snd.play().catch(() => {});
 }
 
 // アニメーション要素を生成・配置してから自動削除
@@ -1967,12 +1910,12 @@ function _fxAllIn() {
 
 function playFX(type) {
   switch (type) {
-    case 'check': _sfxCheck(); _fxCheck(); break;
-    case 'call':  _sfxCall();  _fxCall();  break;
-    case 'bet':   _sfxBet();   _fxBet(false); break;
-    case 'raise': _sfxRaise(); _fxBet(true);  break;
-    case 'fold':  _sfxFold();  _fxFold();  break;
-    case 'allin': _sfxAllIn(); _fxAllIn(); break;
+    case 'check': _playSound('check'); _fxCheck();      break;
+    case 'call':  _playSound('call');  _fxCall();       break;
+    case 'bet':   _playSound('bet');   _fxBet(false);   break;
+    case 'raise': _playSound('bet');   _fxBet(true);    break;
+    case 'fold':  _playSound('fold');  _fxFold();       break;
+    case 'allin': _playSound('allin'); _fxAllIn();      break;
   }
 }
 
