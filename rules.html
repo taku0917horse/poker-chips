@@ -110,6 +110,36 @@ header {
 }
 .street-detail span { color: #fbbf24; font-weight: 700; }
 
+/* betting mode comparison */
+.betting-mode-card {
+  border-radius: 14px; padding: 16px; margin-bottom: 12px;
+}
+.bmc-blind { background: #eff6ff; border: 1.5px solid #bfdbfe; }
+.bmc-ante  { background: #f0fdf4; border: 1.5px solid #bbf7d0; }
+.bmc-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+}
+.bmc-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px;
+}
+.bmc-badge-blind { background: #1e40af; color: white; }
+.bmc-badge-ante  { background: var(--primary); color: white; }
+.bmc-label { font-size: 12px; font-weight: 600; color: var(--subtext); }
+.bmc-desc {
+  font-size: 13px; color: var(--text); line-height: 1.7; margin-bottom: 10px;
+}
+.bmc-features { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.bmc-features li {
+  font-size: 12.5px; color: var(--text); line-height: 1.6;
+  padding-left: 18px; position: relative;
+}
+.bmc-features li::before {
+  content: '✓'; position: absolute; left: 0;
+  font-size: 11px; font-weight: 700; top: 2px;
+}
+.bmc-blind .bmc-features li::before { color: #1e40af; }
+.bmc-ante  .bmc-features li::before { color: var(--primary); }
+
 /* betting rules */
 .rule-box {
   background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 12px;
@@ -304,6 +334,40 @@ header {
         </tr>
       </tbody>
     </table>
+  </div>
+
+  <!-- ベッティング方式の種類 -->
+  <div class="section-card">
+    <div class="section-title">
+      <i data-lucide="layers" width="16" height="16"></i>
+      ベッティング方式の種類
+    </div>
+
+    <div class="betting-mode-card bmc-blind">
+      <div class="bmc-header">
+        <span class="bmc-badge bmc-badge-blind">ブラインド方式</span>
+        <span class="bmc-label">SB / BB</span>
+      </div>
+      <p class="bmc-desc">ディーラーボタンの左隣がスモールブラインド（SB）、その隣がビッグブラインド（BB＝SBの2倍）を強制的に払う。他の参加者はカード配布前に何も払わない。</p>
+      <ul class="bmc-features">
+        <li>毎ハンドで払うのはSB・BBの2人だけ。ボタン移動と共に順番に回る</li>
+        <li>BBオプション：誰もレイズしなければ、BBの人は追加で払わずそのまま見られる特権がある</li>
+        <li>カジノ・トーナメントで最も広く使われる標準的な方式</li>
+      </ul>
+    </div>
+
+    <div class="betting-mode-card bmc-ante">
+      <div class="bmc-header">
+        <span class="bmc-badge bmc-badge-ante">アンティ方式</span>
+        <span class="bmc-label">全員均等</span>
+      </div>
+      <p class="bmc-desc">ブラインドを使わず、毎ハンド参加者全員が同じ額をポットに投入してからゲームを開始する。特定の2人だけが払うブラインドとは異なり、全員が公平に負担する。</p>
+      <ul class="bmc-features">
+        <li>全員が毎回同額払うため「タダで見られる」特権を持つ人がいない</li>
+        <li>みんなで少しずつ積み上げる感覚に近く、カジュアルなホームゲームで好まれやすい</li>
+        <li>プリフロップの最初のアクションはボタンの次の人からシンプルに開始（SB/BB位置を意識しなくてよい）</li>
+      </ul>
+    </div>
   </div>
 
   <!-- ベッティング順 -->
