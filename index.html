@@ -46,6 +46,7 @@
   }
   .overlay-loading p { color: var(--subtext); font-size: 14px; font-weight: 600; }
 
+  /* Main header */
   header {
     background: linear-gradient(135deg, var(--grad-start) 0%, var(--grad-end) 100%);
     color: white; padding: 32px 20px 28px; text-align: center; position: relative;
@@ -63,6 +64,23 @@
   }
   .header-title { font-size: 26px; font-weight: 700; letter-spacing: 0.5px; }
   .header-sub   { font-size: 13px; opacity: 0.82; margin-top: 4px; }
+
+  /* Setup screen header */
+  .setup-header {
+    background: linear-gradient(135deg, var(--grad-start) 0%, var(--grad-end) 100%);
+    color: white; padding: 13px 16px 12px;
+    display: flex; align-items: center; gap: 8px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .setup-back-btn {
+    background: rgba(255,255,255,0.18); border: none; color: white;
+    border-radius: 9px; padding: 7px 12px; font-size: 13px; font-weight: 600;
+    cursor: pointer; flex-shrink: 0; transition: background 0.15s; font-family: inherit;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .setup-back-btn:active { background: rgba(255,255,255,0.35); }
+  .setup-header-title { flex: 1; text-align: center; font-size: 17px; font-weight: 700; }
+  .setup-header-spacer { width: 70px; flex-shrink: 0; }
 
   .content { padding: 20px 16px 48px; max-width: 480px; margin: 0 auto; }
 
@@ -144,47 +162,47 @@
   }
   .room-del:active { background: #fee2e2; color: var(--danger); }
 
+  /* settings section on setup screen */
   .settings-section {
     background: white; border-radius: 16px;
-    padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 14px;
+    padding: 16px; box-shadow: var(--shadow); margin-bottom: 4px;
   }
-  .settings-toggle {
-    display: flex; align-items: center; justify-content: space-between;
-    cursor: pointer; user-select: none;
-  }
-  .settings-toggle-label {
-    font-size: 12px; font-weight: 700; color: var(--subtext);
-    text-transform: uppercase; letter-spacing: 0.8px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .settings-toggle-arrow {
-    font-size: 14px; color: var(--subtext); transition: transform 0.2s;
-  }
-  .settings-toggle-arrow.open { transform: rotate(180deg); }
-  .settings-body { margin-top: 12px; display: none; }
-  .settings-body.open { display: block; }
   .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .settings-field label {
     display: block; font-size: 11px; font-weight: 700; color: var(--subtext);
     text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
   }
-  .radio-group { display: flex; gap: 10px; margin-top: 2px; }
-  .radio-item {
-    flex: 1; display: flex; align-items: center; gap: 7px; cursor: pointer;
-    padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
-    font-size: 13px; font-weight: 600; color: var(--text);
-    transition: all 0.15s; user-select: none;
-  }
-  .radio-item:has(input:checked) { border-color: var(--primary); background: #f0fdf4; color: var(--primary); }
-  .radio-item input[type=radio] { accent-color: var(--primary); width: 15px; height: 15px; -webkit-appearance: auto; appearance: auto; padding: 0; flex-shrink: 0; }
-  .settings-field input, .settings-field select {
+  .settings-field input {
     width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
     font-size: 14px; font-weight: 600; color: var(--text); background: white;
     outline: none; transition: border-color 0.2s; font-family: inherit;
     -webkit-appearance: none; appearance: none;
   }
-  .settings-field input:focus, .settings-field select:focus {
+  .settings-field input:focus {
     border-color: var(--primary); box-shadow: 0 0 0 3px rgba(22,163,74,0.12);
+  }
+
+  /* betting type tabs */
+  .betting-tabs {
+    display: flex; gap: 6px; margin-bottom: 16px;
+  }
+  .betting-tab {
+    flex: 1; padding: 10px 8px; border: 1.5px solid var(--border); border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    background: white; color: var(--subtext);
+    transition: all 0.15s; font-family: inherit;
+  }
+  .betting-tab.active {
+    border-color: var(--primary); background: #f0fdf4; color: var(--primary);
+  }
+  .betting-tab:active { transform: scale(0.97); }
+
+  .settings-divider {
+    height: 1px; background: var(--border); margin: 14px 0;
+  }
+  .settings-section-label {
+    font-size: 11px; font-weight: 700; color: var(--subtext);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;
   }
 
   .toast {
@@ -208,7 +226,8 @@
   <p>作成中...</p>
 </div>
 
-<div id="main">
+<!-- メイン画面 -->
+<div id="main-view">
   <header>
     <a href="rules.html?from=index.html" class="header-rules-link">
       <i data-lucide="book-open" width="13" height="13"></i>ルール
@@ -230,64 +249,7 @@
 
   <div class="content">
 
-    <!-- ゲーム設定 -->
-    <div class="settings-section">
-      <div class="settings-toggle" onclick="toggleSettings()">
-        <span class="settings-toggle-label">
-          <i data-lucide="settings" width="13" height="13"></i>
-          ゲーム設定
-        </span>
-        <span class="settings-toggle-arrow" id="settings-arrow">▼</span>
-      </div>
-      <div class="settings-body" id="settings-body">
-
-        <!-- ベッティング方式 -->
-        <div class="settings-field" style="margin-bottom:12px">
-          <label>ベッティング方式</label>
-          <div class="radio-group">
-            <label class="radio-item">
-              <input type="radio" name="bettingType" value="blinds" checked onchange="onBettingTypeChange()">
-              <span>ブラインド方式</span>
-            </label>
-            <label class="radio-item">
-              <input type="radio" name="bettingType" value="ante" onchange="onBettingTypeChange()">
-              <span>アンティ方式</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- ブラインド設定 -->
-        <div id="blinds-settings" class="settings-grid">
-          <div class="settings-field">
-            <label>SB チップ数</label>
-            <input id="setting-sb" type="number" value="50" min="1">
-          </div>
-          <div class="settings-field">
-            <label>BB チップ数</label>
-            <input id="setting-bb" type="number" value="100" min="1">
-          </div>
-        </div>
-
-        <!-- アンティ設定 -->
-        <div id="ante-settings" style="display:none;margin-bottom:2px">
-          <div class="settings-field">
-            <label>アンティ額</label>
-            <input id="setting-ante" type="number" value="50" min="1">
-          </div>
-        </div>
-
-        <!-- 共通 -->
-        <div class="settings-grid" style="margin-top:10px">
-          <div class="settings-field">
-            <label>開始チップ数（全員共通）</label>
-            <input id="setting-stack" type="number" value="1000" min="1">
-          </div>
-        </div>
-
-      </div>
-    </div>
-
-    <button class="btn-create" onclick="createRoom()">
+    <button class="btn-create" onclick="showSetup()">
       <i data-lucide="plus-circle" width="22" height="22"></i>
       新しいゲームを作成
     </button>
@@ -312,10 +274,98 @@
   </div>
 </div>
 
+<!-- ゲーム設定画面 -->
+<div id="setup-view" class="hidden">
+  <div class="setup-header">
+    <button class="setup-back-btn" onclick="hideSetup()">
+      <i data-lucide="arrow-left" width="15" height="15"></i>戻る
+    </button>
+    <div class="setup-header-title">ゲーム設定</div>
+    <div class="setup-header-spacer"></div>
+  </div>
+
+  <div class="content">
+    <div class="settings-section">
+
+      <!-- ベッティング方式タブ -->
+      <div class="settings-section-label">ベッティング方式</div>
+      <div class="betting-tabs">
+        <button class="betting-tab active" id="idx-tab-ante" onclick="switchBettingTab('ante')">アンティ方式</button>
+        <button class="betting-tab" id="idx-tab-blinds" onclick="switchBettingTab('blinds')">ブラインド方式</button>
+      </div>
+
+      <!-- アンティ設定 -->
+      <div id="idx-ante-settings">
+        <div class="settings-field">
+          <label>アンティ額</label>
+          <input id="setting-ante" type="number" value="50" min="1">
+        </div>
+      </div>
+
+      <!-- ブラインド設定 -->
+      <div id="idx-blinds-settings" class="hidden">
+        <div class="settings-grid">
+          <div class="settings-field">
+            <label>SB チップ数</label>
+            <input id="setting-sb" type="number" value="50" min="1">
+          </div>
+          <div class="settings-field">
+            <label>BB チップ数</label>
+            <input id="setting-bb" type="number" value="100" min="1">
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-divider"></div>
+      <div class="settings-section-label">共通設定</div>
+
+      <div class="settings-grid">
+        <div class="settings-field">
+          <label>開始チップ数</label>
+          <input id="setting-stack" type="number" value="1000" min="1">
+        </div>
+        <div class="settings-field">
+          <label>最小チップ単位</label>
+          <input id="setting-chip-unit" type="number" value="100" min="1">
+        </div>
+      </div>
+
+    </div>
+
+    <button class="btn-create" onclick="createRoom()">
+      <i data-lucide="plus-circle" width="22" height="22"></i>
+      ゲームを作成
+    </button>
+  </div>
+</div>
+
 <div id="toast" class="toast"></div>
 <div id="app-version-footer" style="text-align:center;font-size:10px;color:#94a3b8;padding:10px 0 16px;letter-spacing:.03em"></div>
 
 <script>
+  // ---- 現在のベッティングタブ ----
+  let currentBettingTab = 'ante';
+
+  // ---- 設定画面 ----
+  function showSetup() {
+    document.getElementById('main-view').classList.add('hidden');
+    document.getElementById('setup-view').classList.remove('hidden');
+    renderIcons();
+  }
+
+  function hideSetup() {
+    document.getElementById('setup-view').classList.add('hidden');
+    document.getElementById('main-view').classList.remove('hidden');
+  }
+
+  function switchBettingTab(type) {
+    currentBettingTab = type;
+    document.getElementById('idx-ante-settings').classList.toggle('hidden', type !== 'ante');
+    document.getElementById('idx-blinds-settings').classList.toggle('hidden', type !== 'blinds');
+    document.getElementById('idx-tab-ante').classList.toggle('active', type === 'ante');
+    document.getElementById('idx-tab-blinds').classList.toggle('active', type === 'blinds');
+  }
+
   // ---- 履歴 ----
   function renderHistory() {
     const rooms   = loadHistory();
@@ -367,33 +417,19 @@
     location.href = 'room.html?room=' + code;
   }
 
-  // ---- 設定パネル開閉 ----
-  function toggleSettings() {
-    const body  = document.getElementById('settings-body');
-    const arrow = document.getElementById('settings-arrow');
-    const open  = body.classList.toggle('open');
-    arrow.classList.toggle('open', open);
-  }
-
-  function onBettingTypeChange() {
-    const type = document.querySelector('input[name="bettingType"]:checked').value;
-    document.getElementById('blinds-settings').style.display = type === 'blinds' ? '' : 'none';
-    document.getElementById('ante-settings').style.display   = type === 'ante'   ? '' : 'none';
-  }
-
   // ---- ルーム作成 ----
   async function createRoom() {
-    history.pushState({ creating: true }, '');
     document.getElementById('overlay-loading').classList.remove('hidden');
-    document.getElementById('main').classList.add('hidden');
+    document.getElementById('setup-view').classList.add('hidden');
 
     try {
       const user        = await ensureAuth();
       const { db }      = initFirebase();
-      const bettingType = document.querySelector('input[name="bettingType"]:checked').value;
+      const bettingType = currentBettingTab;
       const initialStack = parseInt(document.getElementById('setting-stack').value) || 1000;
+      const chipUnit     = parseInt(document.getElementById('setting-chip-unit').value) || 1;
 
-      const settings = { bettingType, initialStack };
+      const settings = { bettingType, initialStack, chipUnit };
       if (bettingType === 'blinds') {
         settings.smallBlind = parseInt(document.getElementById('setting-sb').value)   || 50;
         settings.bigBlind   = parseInt(document.getElementById('setting-bb').value)   || 100;
@@ -401,7 +437,6 @@
         settings.anteAmount = parseInt(document.getElementById('setting-ante').value) || 50;
       }
 
-      // 重複しない6桁コードを生成（最大5回試行）
       let code;
       for (let i = 0; i < 5; i++) {
         code = generateRoomCode();
@@ -432,9 +467,8 @@
       location.href = 'room.html?room=' + code;
     } catch (err) {
       console.error('createRoom error:', err);
-      history.replaceState(null, '');
       document.getElementById('overlay-loading').classList.add('hidden');
-      document.getElementById('main').classList.remove('hidden');
+      document.getElementById('setup-view').classList.remove('hidden');
       showToast('作成に失敗しました: ' + (err.message || ''));
     }
   }
@@ -449,28 +483,14 @@
       return;
     }
     initFirebase();
-    toggleSettings();
     renderHistory();
     renderIcons();
-  });
 
-  window.addEventListener('popstate', () => {
-    const overlay = document.getElementById('overlay-loading');
-    if (!overlay.classList.contains('hidden')) {
-      overlay.classList.add('hidden');
-      document.getElementById('main').classList.remove('hidden');
+    if (window.APP_VERSION) {
+      const el = document.getElementById('app-version-footer');
+      if (el) el.textContent = `rev. ${APP_VERSION.hash} · ${APP_VERSION.date}`;
     }
   });
-
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && document.activeElement.id !== 'join-input') return;
-  });
-
-  // バージョン表示
-  if (window.APP_VERSION) {
-    const el = document.getElementById('app-version-footer');
-    if (el) el.textContent = `rev. ${APP_VERSION.hash} · ${APP_VERSION.date}`;
-  }
 </script>
 </body>
 </html>

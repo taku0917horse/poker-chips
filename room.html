@@ -611,6 +611,49 @@ header {
 .rank-preview-label { font-size: 11px; color: var(--subtext); min-width: 68px; }
 .rank-preview-player { font-weight: 600; flex: 1; }
 .rank-preview-amount { font-weight: 700; color: var(--primary); white-space: nowrap; }
+
+/* hand result panel */
+.hand-result-section {
+  background: white; border-radius: 16px;
+  padding: 14px 16px; box-shadow: var(--shadow); margin: 12px 16px 0;
+}
+.hand-result-title {
+  font-size: 12px; font-weight: 700; color: var(--subtext);
+  text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 6px;
+}
+.hand-result-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 4px; border-bottom: 1px solid var(--border);
+}
+.hand-result-row:last-child { border-bottom: none; }
+.hand-result-name { font-size: 14px; font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hand-result-stacks { font-size: 12px; color: var(--subtext); white-space: nowrap; }
+.hand-result-diff { font-size: 14px; font-weight: 700; min-width: 52px; text-align: right; white-space: nowrap; }
+
+/* seat order modal */
+.seat-order-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.seat-order-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; background: #f8faff; border-radius: 12px;
+  border: 1.5px solid var(--border);
+}
+.seat-order-num {
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--subtext); color: white;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.seat-order-name { font-size: 14px; font-weight: 600; flex: 1; }
+.seat-order-btns { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+.seat-order-btn {
+  background: none; border: 1px solid var(--border); border-radius: 6px;
+  width: 28px; height: 22px; cursor: pointer; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--subtext); transition: all 0.12s;
+}
+.seat-order-btn:not(:disabled):active { background: #e2e8f0; }
+.seat-order-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -684,6 +727,9 @@ header {
     <a id="menu-rules-link" href="rules.html" class="header-menu-item" onclick="closeHeaderMenu()">
       <i data-lucide="book-open" width="16" height="16"></i>ルール
     </a>
+    <button id="menu-seat-order-btn" class="header-menu-item hidden" onclick="openSeatOrderModal(); closeHeaderMenu()">
+      <i data-lucide="list-ordered" width="16" height="16"></i>順番入れ替え
+    </button>
     <button class="header-menu-item" onclick="shareRoom(); closeHeaderMenu()">
       <i data-lucide="link" width="16" height="16"></i>共有
     </button>
@@ -814,6 +860,15 @@ header {
       <div id="winner-select-wait" class="hidden">
         <p class="waiting-host">ホストが勝者を選択中...</p>
       </div>
+    </div>
+
+    <!-- ハンド結果パネル -->
+    <div id="hand-result-section" class="hand-result-section hidden">
+      <div class="hand-result-title">
+        <i data-lucide="bar-chart-2" width="13" height="13"></i>
+        ハンド #<span id="hand-result-num">1</span> 結果
+      </div>
+      <div id="hand-result-list"></div>
     </div>
 
     <!-- アクションパネル（自分の手番） -->
@@ -973,6 +1028,26 @@ header {
       <button class="modal-cancel" onclick="closeExitModal()">キャンセル</button>
       <button id="exit-confirm-btn" class="modal-confirm-danger" onclick="confirmLeave()">
         <i data-lucide="log-out" width="16" height="16"></i>退出する
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 座席順入れ替えモーダル -->
+<div id="seat-order-modal" class="modal-overlay hidden" onclick="handleSeatOrderBackdrop(event)">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <span class="modal-title">座席順の入れ替え</span>
+      <button class="modal-close" onclick="closeSeatOrderModal()">
+        <i data-lucide="x" width="22" height="22"></i>
+      </button>
+    </div>
+    <div style="font-size:13px;color:var(--subtext);margin-bottom:14px">↑↓ ボタンで順番を変更してください</div>
+    <div id="seat-order-list" class="seat-order-list"></div>
+    <div class="modal-actions">
+      <button class="modal-cancel" onclick="closeSeatOrderModal()">キャンセル</button>
+      <button class="modal-confirm" onclick="saveSeatOrder()">
+        <i data-lucide="save" width="16" height="16"></i>保存
       </button>
     </div>
   </div>
@@ -1174,6 +1249,18 @@ async function registerPlayer() {
 
 // ---- プレイ中フェーズ描画 ----
 function getSortedPlayers() {
+  const seatOrder = roomData?.seatOrder;
+  if (seatOrder && seatOrder.length > 0) {
+    const result = [];
+    const remaining = { ...players };
+    for (const uid of seatOrder) {
+      if (remaining[uid]) { result.push([uid, remaining[uid]]); delete remaining[uid]; }
+    }
+    const extra = Object.entries(remaining).sort((a, b) =>
+      (a[1].joinedAt?.seconds || 0) - (b[1].joinedAt?.seconds || 0)
+    );
+    return [...result, ...extra];
+  }
   return Object.entries(players).sort((a, b) =>
     (a[1].joinedAt?.seconds || 0) - (b[1].joinedAt?.seconds || 0)
   );
@@ -1345,6 +1432,31 @@ function renderPlayingPhase() {
   if (menuFixBtn) menuFixBtn.classList.toggle('hidden', !isHost);
   const menuExitBtn = document.getElementById('menu-exit-btn');
   if (menuExitBtn) menuExitBtn.classList.toggle('hidden', myPlayer?.status === 'sittingOut');
+  const menuSeatBtn = document.getElementById('menu-seat-order-btn');
+  if (menuSeatBtn) menuSeatBtn.classList.toggle('hidden', !isHost || gamePhase !== 'waiting');
+
+  // --- ハンド結果パネル ---
+  const handResultSec = document.getElementById('hand-result-section');
+  if (!handActive && !showdown && gamePhase === 'playing') {
+    handResultSec.classList.remove('hidden');
+    document.getElementById('hand-result-num').textContent = handNum;
+    document.getElementById('hand-result-list').innerHTML = getSortedPlayers().map(([uid, p]) => {
+      if (p.status === 'sittingOut') return '';
+      const start = p.startStack != null ? p.startStack : p.stack;
+      const end   = p.stack || 0;
+      const diff  = end - start;
+      const diffStr   = diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString();
+      const diffColor = diff > 0 ? 'var(--primary)' : diff < 0 ? 'var(--danger)' : 'var(--subtext)';
+      return `<div class="hand-result-row">
+        <div class="avatar" style="background:${colorFor(p.name)};width:32px;height:32px;font-size:13px">${initials(p.name)}</div>
+        <div class="hand-result-name">${esc(p.name)}</div>
+        <div class="hand-result-stacks">${start.toLocaleString()} → ${end.toLocaleString()}</div>
+        <div class="hand-result-diff" style="color:${diffColor}">${diffStr}</div>
+      </div>`;
+    }).join('');
+  } else {
+    handResultSec.classList.add('hidden');
+  }
 
   // --- ショーダウンセクション ---
   const showdownSec  = document.getElementById('showdown-section');
@@ -1416,7 +1528,7 @@ async function startHand() {
   // 各プレイヤーのベース状態（後でブラインドで上書き）
   const pUpd = {};
   order.forEach(uid => {
-    pUpd[uid] = { currentBet: 0, status: 'active', hasActedThisRound: false, handContribution: 0 };
+    pUpd[uid] = { currentBet: 0, status: 'active', hasActedThisRound: false, handContribution: 0, startStack: players[uid]?.stack || 0 };
   });
 
   let pot = 0;
@@ -1764,6 +1876,11 @@ async function actionAllIn() {
   } finally { isActing = false; }
 }
 
+// ---- チップ単位ユーティリティ ----
+function getChipUnit() { return roomData?.settings?.chipUnit || 1; }
+function roundToUnit(n, unit) { return unit > 1 ? Math.round(n / unit) * unit : n; }
+function ceilToUnit(n, unit)  { return unit > 1 ? Math.ceil(n  / unit) * unit : n; }
+
 // ---- ベット/レイズモーダル ----
 // ---- ベット額パラメータ（常に最新のroomData/playersから計算） ----
 function getBetParams() {
@@ -1793,12 +1910,12 @@ function updateBetModalDisplay() {
     mrRow.style.display = 'none';
   }
   document.getElementById('bet-amount-input').min = p.minTotal;
-  // クイックボタン金額を最新値で再計算
-  const half = Math.max(p.minTotal, p.myBet + Math.ceil(p.pot / 2));
-  const full = Math.max(p.minTotal, p.myBet + p.pot);
-  const twox = p.cur > 0
-    ? Math.max(p.minTotal, p.cur * 2)
-    : p.minTotal * 2;
+  // クイックボタン金額を最新値で再計算（chipUnit単位に丸める）
+  const unit = getChipUnit();
+  const half = Math.max(p.minTotal, roundToUnit(p.myBet + Math.ceil(p.pot / 2), unit));
+  const full = Math.max(p.minTotal, roundToUnit(p.myBet + p.pot, unit));
+  const twox = p.cur > 0 ? roundToUnit(p.cur * 2, unit) : roundToUnit(p.minTotal * 2, unit);
+  console.log(`[bet] 2x: cur=${p.cur}, twox=${twox}, unit=${unit}`);
   document.getElementById('bq-half').textContent  = `½ポット (${half.toLocaleString()})`;
   document.getElementById('bq-pot').textContent   = `ポット (${full.toLocaleString()})`;
   document.getElementById('bq-2x').textContent    = `2倍 (${twox.toLocaleString()})`;
@@ -1827,7 +1944,9 @@ async function confirmBet() {
   const gs = roomData?.gameState;
   const me = players[myUid];
   if (!gs || !me) return;
-  const totalBet = parseInt(document.getElementById('bet-amount-input').value) || 0;
+  let totalBet = parseInt(document.getElementById('bet-amount-input').value) || 0;
+  const unit = getChipUnit();
+  if (unit > 1) totalBet = roundToUnit(totalBet, unit);
   const myBet  = me.currentBet || 0;
   const cur    = gs.currentBetAmount || 0;
   const myStack = me.stack || 0;
@@ -1940,6 +2059,59 @@ function calculatePots(playersList) {
   console.assert(total === newTotal, `[pots] MISMATCH contribs=${total} pots=${newTotal}`);
 
   return pots.length > 0 ? pots : [{ amount: total, eligiblePlayerIds: [] }];
+}
+
+// ---- 座席順入れ替え ----
+let seatOrderDraft = [];
+
+function openSeatOrderModal() {
+  if (!isHost) return;
+  seatOrderDraft = getSortedPlayers().map(([uid]) => uid);
+  renderSeatOrderList();
+  document.getElementById('seat-order-modal').classList.remove('hidden');
+  renderIcons();
+}
+
+function closeSeatOrderModal() {
+  document.getElementById('seat-order-modal').classList.add('hidden');
+}
+
+function handleSeatOrderBackdrop(e) {
+  if (e.target === document.getElementById('seat-order-modal')) closeSeatOrderModal();
+}
+
+function renderSeatOrderList() {
+  const n = seatOrderDraft.length;
+  document.getElementById('seat-order-list').innerHTML = seatOrderDraft.map((uid, i) => {
+    const p = players[uid];
+    return `<div class="seat-order-row">
+      <span class="seat-order-num">${i + 1}</span>
+      <div class="avatar" style="background:${colorFor(p?.name||'')};width:32px;height:32px;font-size:13px">${initials(p?.name||'?')}</div>
+      <span class="seat-order-name">${esc(p?.name || uid)}</span>
+      <div class="seat-order-btns">
+        <button class="seat-order-btn" onclick="moveSeat(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button class="seat-order-btn" onclick="moveSeat(${i},1)"  ${i === n-1 ? 'disabled' : ''}>▼</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function moveSeat(idx, dir) {
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= seatOrderDraft.length) return;
+  const draft = [...seatOrderDraft];
+  [draft[idx], draft[newIdx]] = [draft[newIdx], draft[idx]];
+  seatOrderDraft = draft;
+  renderSeatOrderList();
+}
+
+async function saveSeatOrder() {
+  try {
+    const { db } = initFirebase();
+    await db.collection(ROOMS_COLLECTION).doc(roomId).update({ seatOrder: seatOrderDraft });
+    closeSeatOrderModal();
+    showToast('座席順を保存しました');
+  } catch (err) { console.error(err); showToast('保存に失敗しました'); }
 }
 
 // ---- ショーダウンタブ管理 ----
