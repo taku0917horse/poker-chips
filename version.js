@@ -1,1 +1,1 @@
-﻿window.APP_VERSION = { hash: 'a4c7278', date: '2026-07-14' };
+window.APP_VERSION = { version: '0.1.0', date: '2026-07-14' };
