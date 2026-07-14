@@ -1363,10 +1363,11 @@ function renderPlayingPhase() {
       let positionBadges = '';
       if (handActive && dealerIdx != null && tn > 0) {
         const oi = turnOrder.indexOf(uid);
+        const isBlinds = roomData?.settings?.bettingType !== 'ante';
         if (oi >= 0) {
-          if (oi === dealerIdx % tn)              positionBadges += '<span class="badge dealer-badge">D</span>';
-          if (tn >= 2 && oi === (dealerIdx + 1) % tn) positionBadges += '<span class="badge sb-badge">SB</span>';
-          if (tn >= 3 && oi === (dealerIdx + 2) % tn) positionBadges += '<span class="badge bb-badge">BB</span>';
+          if (oi === dealerIdx % tn)                   positionBadges += '<span class="badge dealer-badge">D</span>';
+          if (isBlinds && tn >= 2 && oi === (dealerIdx + 1) % tn) positionBadges += '<span class="badge sb-badge">SB</span>';
+          if (isBlinds && tn >= 3 && oi === (dealerIdx + 2) % tn) positionBadges += '<span class="badge bb-badge">BB</span>';
         }
       }
 
@@ -1596,8 +1597,12 @@ async function startHand() {
     currentBetAmount = 0;
   }
 
-  // プリフロップ先行プレイヤー: ヘッズアップ=ディーラー、3人以上=UTG(D+3)
-  const preflopStart = n <= 2 ? dealerIdx : (dealerIdx + 3) % n;
+  // プリフロップ先行プレイヤー
+  // アンティ方式: ブラインドなしなので D+1 から開始
+  // ブラインド方式: ヘッズアップ=ディーラー(SB)、3人以上=UTG(D+3)
+  const preflopStart = settings.bettingType === 'ante'
+    ? (dealerIdx + 1) % n
+    : (n <= 2 ? dealerIdx : (dealerIdx + 3) % n);
 
   // バッチ書き込み
   order.forEach(uid => {
